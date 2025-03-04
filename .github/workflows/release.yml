@@ -195,10 +195,4 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./dist/${{ matrix.asset_name }}.sig
           asset_name: ${{ matrix.asset_name }}.sig
-          asset_content_type: application/octet-stream
-
-### Security Notes
-- Our executable is signed with a digital signature for security
-- If Windows SmartScreen shows a warning, click "More Info" then "Run Anyway"
-- You can verify our signature by right-clicking the .exe → Properties → Digital Signatures
-- The source code is available in this repository for transparency 
+          asset_content_type: application/octet-stream 
