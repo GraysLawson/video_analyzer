@@ -10,6 +10,11 @@ NC='\033[0m' # No Color
 REPO_OWNER="GraysLawson"
 REPO_NAME="video_analyzer"
 
+# Installation paths
+INSTALL_DIR="/usr/local"
+VENV_DIR="${INSTALL_DIR}/video-analyzer-env"
+BIN_PATH="${INSTALL_DIR}/bin/video-analyzer"
+
 # Essential dependencies
 REQUIRED_PACKAGES=(
     "ffmpeg"
@@ -18,6 +23,42 @@ REQUIRED_PACKAGES=(
     "python3-venv"
     "python3-tk"
 )
+
+# Function to detect if program is installed
+check_installation() {
+    if [ -d "$VENV_DIR" ] && [ -f "$BIN_PATH" ]; then
+        return 0  # installed
+    else
+        return 1  # not installed
+    fi
+}
+
+# Function to uninstall
+uninstall() {
+    echo -e "${YELLOW}Uninstalling video-analyzer...${NC}"
+    
+    # Remove virtual environment
+    if [ -d "$VENV_DIR" ]; then
+        rm -rf "$VENV_DIR"
+    fi
+    
+    # Remove binary
+    if [ -f "$BIN_PATH" ]; then
+        rm -f "$BIN_PATH"
+    fi
+    
+    echo -e "${GREEN}Uninstallation complete!${NC}"
+}
+
+# Function to get current version
+get_current_version() {
+    if [ -f "$VENV_DIR/lib/python"*"/site-packages/video_analyzer/__init__.py" ]; then
+        CURRENT_VERSION=$(grep "__version__" "$VENV_DIR"/lib/python*/site-packages/video_analyzer/__init__.py | cut -d'"' -f2)
+        echo "$CURRENT_VERSION"
+    else
+        echo "unknown"
+    fi
+}
 
 # Function to detect system architecture
 detect_arch() {
@@ -333,18 +374,45 @@ EOF
 main() {
     local arch=$(detect_arch)
     local os=$(detect_os)
-    local install_dir="/usr/local/bin"
 
-    echo -e "${GREEN}Detected system: $os on $arch${NC}"
-
-    # Install system dependencies
-    install_system_dependencies
-
-    # Install minimal version
-    install_minimal
-
-    echo -e "${GREEN}Installation complete!${NC}"
-    echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+    if check_installation; then
+        current_version=$(get_current_version)
+        echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
+        echo -e "Choose an option:"
+        echo -e "1) Update"
+        echo -e "2) Uninstall"
+        echo -e "3) Exit"
+        read -p "Enter your choice (1-3): " choice
+        
+        case $choice in
+            1)
+                echo -e "${YELLOW}Updating video-analyzer...${NC}"
+                uninstall
+                install_system_dependencies
+                install_minimal
+                echo -e "${GREEN}Update complete!${NC}"
+                echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+                ;;
+            2)
+                uninstall
+                ;;
+            3)
+                echo -e "${YELLOW}Exiting...${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Exiting...${NC}"
+                exit 1
+                ;;
+        esac
+    else
+        echo -e "${GREEN}Detected system: $os on $arch${NC}"
+        echo -e "${YELLOW}Installing video-analyzer...${NC}"
+        install_system_dependencies
+        install_minimal
+        echo -e "${GREEN}Installation complete!${NC}"
+        echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+    fi
 }
 
 # Run main installation
