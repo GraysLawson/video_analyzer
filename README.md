@@ -17,7 +17,53 @@ A powerful tool for finding and managing duplicate video files with different re
 - 🎯 Configurable similarity threshold
 - 🔒 Safe deletion with dry-run option
 
+## Project Structure
+
+```
+video_analyzer/
+├── video_analyzer/        # Main package directory
+│   ├── __init__.py       # Package initialization
+│   ├── __main__.py       # Entry point
+│   ├── core/             # Core functionality
+│   │   ├── __init__.py
+│   │   ├── analyzer.py
+│   │   └── video_metadata.py
+│   ├── ui/               # User interface components
+│   │   ├── __init__.py
+│   │   └── main_menu.py
+│   └── utils/            # Utility functions
+│       ├── __init__.py
+│       └── display.py
+├── setup.py              # Package configuration
+├── requirements.txt      # Dependencies
+└── README.md            # Documentation
+```
+
 ## Installation
+
+### Option 1: Standalone Executable (Recommended)
+
+1. Download the latest release for your platform:
+   - [Windows (video-analyzer.exe)](https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer.exe)
+   - [Linux (video-analyzer)](https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer)
+   - [macOS (video-analyzer)](https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer-macos)
+
+2. Install FFmpeg:
+   - **Windows**: Download from https://ffmpeg.org/download.html and add to PATH
+   - **Linux**: Run `sudo apt-get install ffmpeg`
+   - **MacOS**: Run `brew install ffmpeg`
+
+3. Run the program:
+   - **Windows**: Double-click `video-analyzer.exe` or run from command prompt
+   - **Linux/MacOS**: 
+     ```bash
+     chmod +x video-analyzer  # Make executable
+     ./video-analyzer        # Run the program
+     ```
+
+### Option 2: Python Package Installation
+
+If you prefer to install from source or need to modify the code:
 
 1. Clone the repository:
 ```bash
@@ -25,93 +71,32 @@ git clone https://github.com/yourusername/video_analyzer.git
 cd video_analyzer
 ```
 
-2. Create and activate a virtual environment:
+2. Install the package:
 ```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# Linux/MacOS
-python3 -m venv venv
-source venv/bin/activate
+pip install .
 ```
 
-3. Install dependencies:
+3. Run the program:
 ```bash
-pip install -r requirements.txt
+video-analyzer
 ```
 
-4. Install the package in development mode:
-```bash
-# Make sure you're in the video_analyzer directory (where setup.py is located)
-pip install -e .
+### Building from Source
 
-# Verify installation
-python -c "import video_analyzer"
+To create your own standalone executable:
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/video_analyzer.git
+cd video_analyzer
 ```
 
-### Common Installation Issues
+2. Run the build script:
+```bash
+python build.py
+```
 
-1. **Module Not Found Error**:
-   If you see `No module named video_analyzer`, try these steps in order:
-   ```bash
-   # 1. Ensure you're in the correct directory
-   pwd  # or 'cd' on Windows
-   # Should show /path/to/video_analyzer
-   
-   # 2. Verify virtual environment is activated
-   # You should see (venv) at the start of your prompt
-   
-   # 3. Reinstall the package
-   pip uninstall video_analyzer  # Remove any old installations
-   pip install -e .
-   
-   # 4. Verify the installation
-   pip list | grep video_analyzer  # or 'pip list | findstr video_analyzer' on Windows
-   python -c "import video_analyzer"
-   ```
-
-2. **Permission Issues**:
-   If you get permission errors during installation:
-   ```bash
-   # Linux/MacOS
-   sudo chown -R $(whoami) .
-   pip install -e .
-   
-   # Windows (run as administrator)
-   pip install -e .
-   ```
-
-3. **Package Structure Issues**:
-   Verify your directory structure looks like this:
-   ```
-   video_analyzer/
-   ├── setup.py
-   ├── requirements.txt
-   └── src/
-       ├── __init__.py
-       ├── __main__.py
-       ├── core/
-       │   ├── __init__.py
-       │   ├── analyzer.py
-       │   └── ...
-       ├── ui/
-       │   ├── __init__.py
-       │   └── ...
-       └── utils/
-           ├── __init__.py
-           └── ...
-   ```
-
-4. **Running the Application**:
-   After successful installation, you can run the application in two ways:
-   ```bash
-   # Method 1: Using the installed console script
-   video-analyzer
-   
-   # Method 2: Using Python module syntax
-   python -m video_analyzer
-   ```
+The executable will be created in the `dist` directory.
 
 ## Dependencies
 

@@ -6,19 +6,23 @@ setup(
     description="Find and manage duplicate video files with different resolutions",
     author="Your Name",
     packages=find_packages(),
-    package_dir={"": "src"},
     install_requires=[
-        'colorama>=0.4.6',
-        'tabulate>=0.9.0',
-        'tqdm>=4.65.0',
-        'rich>=13.7.0',
-        'plotext>=5.2.8',
-        'humanize>=4.9.0'
+        'colorama',
+        'tabulate',
+        'tqdm',
+        'rich',
+        'plotext',
+        'humanize'
     ],
+    extras_require={
+        'dev': [
+            'pyinstaller>=6.3.0'
+        ]
+    },
+    python_requires='>=3.7',
     entry_points={
         'console_scripts': [
             'video-analyzer=video_analyzer.__main__:main',
         ],
     },
-    python_requires='>=3.7',
 ) 
