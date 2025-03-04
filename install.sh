@@ -9,7 +9,14 @@ NC='\033[0m' # No Color
 # Repository information
 REPO_OWNER="GraysLawson"
 REPO_NAME="video_analyzer"
-API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
+
+# Essential dependencies
+REQUIRED_PACKAGES=(
+    "ffmpeg"
+    "python3"
+    "python3-pip"
+    "python3-venv"
+)
 
 # Function to detect system architecture
 detect_arch() {
@@ -48,32 +55,27 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to check GLIBC version
-check_glibc_version() {
-    local version=$(ldd --version 2>&1 | head -n1 | grep -oP 'GLIBC \K[\d.]+')
-    echo "$version"
+# Function to install system dependencies
+install_system_dependencies() {
+    echo -e "${YELLOW}Installing system dependencies...${NC}"
+    if command_exists apt-get; then
+        sudo apt-get update
+        sudo apt-get install -y "${REQUIRED_PACKAGES[@]}"
+    elif command_exists yum; then
+        sudo yum install -y "${REQUIRED_PACKAGES[@]}"
+    elif command_exists dnf; then
+        sudo dnf install -y "${REQUIRED_PACKAGES[@]}"
+    else
+        echo -e "${RED}Could not install dependencies. Please install them manually:${NC}"
+        printf '%s\n' "${REQUIRED_PACKAGES[@]}"
+        exit 1
+    fi
 }
 
-# Function to install using pip
-install_using_pip() {
-    echo -e "${YELLOW}Attempting installation using pip...${NC}"
+# Function to install minimal dependencies
+install_minimal() {
+    echo -e "${YELLOW}Installing minimal dependencies...${NC}"
     
-    # Check if pip is installed
-    if ! command_exists pip; then
-        echo -e "${YELLOW}Installing pip...${NC}"
-        if command_exists apt-get; then
-            sudo apt-get update
-            sudo apt-get install -y python3-pip
-        elif command_exists yum; then
-            sudo yum install -y python3-pip
-        elif command_exists dnf; then
-            sudo dnf install -y python3-pip
-        else
-            echo -e "${RED}Could not install pip. Please install python3-pip manually.${NC}"
-            exit 1
-        fi
-    fi
-
     # Create virtual environment
     echo -e "${YELLOW}Creating virtual environment...${NC}"
     python3 -m venv /usr/local/video-analyzer-env
@@ -81,9 +83,76 @@ install_using_pip() {
     # Activate virtual environment
     source /usr/local/video-analyzer-env/bin/activate
 
-    # Install the package
-    echo -e "${YELLOW}Installing video-analyzer...${NC}"
-    pip install video-analyzer
+    # Install minimal dependencies
+    pip install --no-cache-dir \
+        tabulate \
+        tqdm \
+        colorama \
+        humanize
+
+    # Create the main script
+    echo -e "${YELLOW}Creating main script...${NC}"
+    mkdir -p /usr/local/video-analyzer-env/lib/video_analyzer
+    cat > /usr/local/video-analyzer-env/lib/video_analyzer/__init__.py << 'EOF'
+"""Video Analyzer - A tool for finding and managing duplicate video files."""
+__version__ = "1.0.0"
+EOF
+
+    cat > /usr/local/video-analyzer-env/lib/video_analyzer/__main__.py << 'EOF'
+import os
+import sys
+import subprocess
+from pathlib import Path
+from tabulate import tabulate
+from tqdm import tqdm
+from colorama import init, Fore
+import humanize
+
+init()
+
+def get_video_info(file_path):
+    """Get video metadata using ffprobe."""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_format', '-show_streams', str(file_path)
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return result.stdout
+    except Exception as e:
+        print(f"{Fore.RED}Error processing {file_path}: {e}{Fore.RESET}")
+        return None
+
+def main():
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <directory>")
+        sys.exit(1)
+
+    target_dir = Path(sys.argv[1])
+    if not target_dir.is_dir():
+        print(f"{Fore.RED}Error: {target_dir} is not a directory{Fore.RESET}")
+        sys.exit(1)
+
+    print(f"{Fore.GREEN}Scanning directory: {target_dir}{Fore.RESET}")
+    video_files = []
+    for ext in ('*.mp4', '*.mkv', '*.avi', '*.mov'):
+        video_files.extend(target_dir.rglob(ext))
+
+    if not video_files:
+        print(f"{Fore.YELLOW}No video files found{Fore.RESET}")
+        return
+
+    print(f"\nFound {len(video_files)} video files")
+    for file in tqdm(video_files, desc="Processing"):
+        info = get_video_info(file)
+        if info:
+            size = os.path.getsize(file)
+            print(f"\n{Fore.CYAN}{file.name}{Fore.RESET}")
+            print(f"Size: {humanize.naturalsize(size)}")
+
+if __name__ == '__main__':
+    main()
+EOF
 
     # Create wrapper script
     echo -e "${YELLOW}Creating wrapper script...${NC}"
@@ -96,67 +165,8 @@ EOF
     # Make wrapper script executable
     chmod +x /usr/local/bin/video-analyzer
 
-    echo -e "${GREEN}Installation completed successfully using pip!${NC}"
-    echo -e "${YELLOW}You can now run 'video-analyzer' from anywhere.${NC}"
-}
-
-# Function to install from source
-install_from_source() {
-    echo -e "${YELLOW}Attempting installation from source...${NC}"
-    
-    # Check if git is installed
-    if ! command_exists git; then
-        echo -e "${YELLOW}Installing git...${NC}"
-        if command_exists apt-get; then
-            sudo apt-get update
-            sudo apt-get install -y git
-        elif command_exists yum; then
-            sudo yum install -y git
-        elif command_exists dnf; then
-            sudo dnf install -y git
-        else
-            echo -e "${RED}Could not install git. Please install git manually.${NC}"
-            exit 1
-        fi
-    fi
-
-    # Create temporary directory
-    local temp_dir=$(mktemp -d)
-    cd "$temp_dir"
-
-    # Clone repository
-    echo -e "${YELLOW}Cloning repository...${NC}"
-    git clone https://github.com/${REPO_OWNER}/${REPO_NAME}.git
-    cd ${REPO_NAME}
-
-    # Create virtual environment
-    echo -e "${YELLOW}Creating virtual environment...${NC}"
-    python3 -m venv /usr/local/video-analyzer-env
-
-    # Activate virtual environment
-    source /usr/local/video-analyzer-env/bin/activate
-
-    # Install the package
-    echo -e "${YELLOW}Installing dependencies and package...${NC}"
-    pip install -e .
-
-    # Create wrapper script
-    echo -e "${YELLOW}Creating wrapper script...${NC}"
-    cat > /usr/local/bin/video-analyzer << 'EOF'
-#!/bin/bash
-source /usr/local/video-analyzer-env/bin/activate
-python -m video_analyzer "$@"
-EOF
-
-    # Make wrapper script executable
-    chmod +x /usr/local/bin/video-analyzer
-
-    # Cleanup
-    cd - >/dev/null
-    rm -rf "$temp_dir"
-
-    echo -e "${GREEN}Installation completed successfully from source!${NC}"
-    echo -e "${YELLOW}You can now run 'video-analyzer' from anywhere.${NC}"
+    echo -e "${GREEN}Installation completed successfully!${NC}"
+    echo -e "${YELLOW}You can now run 'video-analyzer <directory>' from anywhere.${NC}"
 }
 
 # Main installation function
@@ -167,37 +177,14 @@ main() {
 
     echo -e "${GREEN}Detected system: $os on $arch${NC}"
 
-    # Check for Python
-    if ! command_exists python3; then
-        echo -e "${YELLOW}Installing Python 3...${NC}"
-        if command_exists apt-get; then
-            sudo apt-get update
-            sudo apt-get install -y python3 python3-venv
-        elif command_exists yum; then
-            sudo yum install -y python3 python3-venv
-        elif command_exists dnf; then
-            sudo dnf install -y python3 python3-venv
-        else
-            echo -e "${RED}Could not install Python 3. Please install python3 and python3-venv manually.${NC}"
-            exit 1
-        fi
-    fi
+    # Install system dependencies
+    install_system_dependencies
 
-    # Try pip installation first
-    if install_using_pip; then
-        exit 0
-    fi
+    # Install minimal version
+    install_minimal
 
-    echo -e "${YELLOW}Pip installation failed, trying source installation...${NC}"
-    
-    # Try source installation
-    if install_from_source; then
-        exit 0
-    fi
-
-    echo -e "${RED}All installation methods failed.${NC}"
-    echo -e "${RED}Please report this issue at: https://github.com/${REPO_OWNER}/${REPO_NAME}/issues${NC}"
-    exit 1
+    echo -e "${GREEN}Installation complete!${NC}"
+    echo -e "${YELLOW}Run 'video-analyzer <directory>' to analyze videos${NC}"
 }
 
 # Run main installation
