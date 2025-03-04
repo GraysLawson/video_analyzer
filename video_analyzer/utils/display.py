@@ -25,16 +25,18 @@ MAX_LOG_LINES = 15
 GRAPH_WIDTH = 60
 GRAPH_HEIGHT = 15
 
-# This file now only imports and re-exports the classes from the split modules
+# Import all components
 from .display_utils import DisplayUtils
-from .basic_display import DisplayManager
+from .basic_display import DisplayManager as BaseDisplayManager
 from .chart_display import ChartDisplayMixin
 from .table_display import TableDisplayMixin
 from .interactive_display import InteractiveDisplayMixin
 from .progress_display import ProgressDisplayMixin
 
-# Apply mixins to DisplayManager 
-DisplayManager.__bases__ = DisplayManager.__bases__ + (ChartDisplayMixin, TableDisplayMixin, InteractiveDisplayMixin, ProgressDisplayMixin)
+# Define a new DisplayManager with proper inheritance instead of modifying __bases__
+class DisplayManager(ChartDisplayMixin, TableDisplayMixin, InteractiveDisplayMixin, ProgressDisplayMixin, BaseDisplayManager):
+    """DisplayManager combining all display functionality through proper inheritance."""
+    pass
 
 # Re-export the classes
 __all__ = ['DisplayUtils', 'DisplayManager'] 
