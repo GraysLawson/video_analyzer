@@ -560,69 +560,86 @@ main() {
     else
         INTERACTIVE=false
         log "INFO" "Running in non-interactive mode"
-        # If not interactive and no arguments, show instructions
-        if [ -z "$1" ]; then
-            log "INFO" "No arguments provided in non-interactive mode"
-            echo -e "${YELLOW}Non-interactive shell detected. Please run one of the following commands:${NC}"
-            echo "curl -sSLO https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh"
-            echo "chmod +x install.sh"
-            echo "./install.sh install     # For fresh installation"
-            echo "./install.sh update      # To update existing installation"
-            echo "./install.sh uninstall   # To uninstall"
-            log "INFO" "Exiting with instructions"
-            exit 1
-        fi
-        log "INFO" "Argument provided: $1"
     fi
 
+    # Handle command line arguments first
+    if [ -n "$1" ]; then
+        log "INFO" "Command line argument provided: $1"
+        case "$1" in
+            install)
+                log "INFO" "Starting fresh installation"
+                INSTALL_TYPE="user"
+                setup_paths "$INSTALL_TYPE"
+                install_system_dependencies
+                install_minimal
+                log "INFO" "Installation completed successfully"
+                echo -e "${GREEN}Installation complete!${NC}"
+                echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+                exit 0
+                ;;
+            install-system)
+                log "INFO" "Starting system-wide installation"
+                INSTALL_TYPE="system"
+                setup_paths "$INSTALL_TYPE"
+                install_system_dependencies
+                install_minimal
+                log "INFO" "Installation completed successfully"
+                echo -e "${GREEN}Installation complete!${NC}"
+                echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+                exit 0
+                ;;
+            update)
+                if check_installation; then
+                    log "INFO" "Starting update process"
+                    echo -e "${YELLOW}Updating video-analyzer...${NC}"
+                    backup_config
+                    uninstall
+                    install_system_dependencies
+                    install_minimal
+                    restore_config
+                    log "INFO" "Update completed successfully"
+                    echo -e "${GREEN}Update complete!${NC}"
+                    echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+                    exit 0
+                else
+                    log "ERROR" "Cannot update: video-analyzer is not installed"
+                    echo -e "${RED}Error: video-analyzer is not installed${NC}"
+                    exit 1
+                fi
+                ;;
+            uninstall)
+                if check_installation; then
+                    uninstall
+                    exit 0
+                else
+                    log "ERROR" "Cannot uninstall: video-analyzer is not installed"
+                    echo -e "${RED}Error: video-analyzer is not installed${NC}"
+                    exit 1
+                fi
+                ;;
+            *)
+                log "ERROR" "Invalid argument: $1"
+                echo -e "${RED}Invalid argument. Valid options are: install, install-system, update, uninstall${NC}"
+                exit 1
+                ;;
+        esac
+    fi
+
+    # Interactive mode
     if check_installation; then
         current_version=$(get_current_version)
         log "INFO" "Found existing installation version: $current_version"
         echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
         
-        if [ "$INTERACTIVE" = true ]; then
-            echo -e "Choose an option:"
-            echo -e "1) Update"
-            echo -e "2) Uninstall"
-            echo -e "3) Exit"
-            read -p "Enter your choice (1-3): " choice
-            log "INFO" "User selected option: $choice"
-            
-            case $choice in
-                1)
-                    ACTION="update"
-                    ;;
-                2)
-                    ACTION="uninstall"
-                    ;;
-                3)
-                    log "INFO" "User chose to exit"
-                    echo -e "${YELLOW}Exiting...${NC}"
-                    exit 0
-                    ;;
-                *)
-                    log "ERROR" "Invalid choice selected"
-                    echo -e "${RED}Invalid choice. Exiting...${NC}"
-                    exit 1
-                    ;;
-            esac
-        else
-            # Non-interactive mode, use command line argument
-            case "$1" in
-                update|uninstall)
-                    ACTION="$1"
-                    log "INFO" "Non-interactive mode: $ACTION selected"
-                    ;;
-                *)
-                    log "ERROR" "Invalid argument in non-interactive mode: $1"
-                    echo -e "${RED}Invalid argument. Use 'update' or 'uninstall'${NC}"
-                    exit 1
-                    ;;
-            esac
-        fi
-
-        case "$ACTION" in
-            update)
+        echo -e "Choose an option:"
+        echo -e "1) Update"
+        echo -e "2) Uninstall"
+        echo -e "3) Exit"
+        read -p "Enter your choice (1-3): " choice
+        log "INFO" "User selected option: $choice"
+        
+        case $choice in
+            1)
                 log "INFO" "Starting update process"
                 echo -e "${YELLOW}Updating video-analyzer...${NC}"
                 backup_config
@@ -634,42 +651,43 @@ main() {
                 echo -e "${GREEN}Update complete!${NC}"
                 echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
                 ;;
-            uninstall)
+            2)
                 uninstall
+                ;;
+            3)
+                log "INFO" "User chose to exit"
+                echo -e "${YELLOW}Exiting...${NC}"
+                exit 0
+                ;;
+            *)
+                log "ERROR" "Invalid choice selected"
+                echo -e "${RED}Invalid choice. Exiting...${NC}"
+                exit 1
                 ;;
         esac
     else
         log "INFO" "No existing installation found"
         echo -e "${GREEN}Detected system: $os on $arch${NC}"
         
-        if [ "$INTERACTIVE" = true ]; then
-            echo -e "Choose installation type:"
-            echo -e "1) System-wide (requires sudo)"
-            echo -e "2) User-local"
-            read -p "Enter your choice (1-2): " install_type
-            log "INFO" "User selected installation type: $install_type"
-            
-            case $install_type in
-                1)
-                    INSTALL_TYPE="system"
-                    ;;
-                2)
-                    INSTALL_TYPE="user"
-                    ;;
-                *)
-                    log "ERROR" "Invalid installation type selected"
-                    echo -e "${RED}Invalid choice. Exiting...${NC}"
-                    exit 1
-                    ;;
-            esac
-        else
-            # Default to user-local installation in non-interactive mode
-            INSTALL_TYPE="user"
-            if [ "$1" = "install-system" ]; then
+        echo -e "Choose installation type:"
+        echo -e "1) System-wide (requires sudo)"
+        echo -e "2) User-local"
+        read -p "Enter your choice (1-2): " install_type
+        log "INFO" "User selected installation type: $install_type"
+        
+        case $install_type in
+            1)
                 INSTALL_TYPE="system"
-            fi
-            log "INFO" "Non-interactive mode: selected $INSTALL_TYPE installation"
-        fi
+                ;;
+            2)
+                INSTALL_TYPE="user"
+                ;;
+            *)
+                log "ERROR" "Invalid installation type selected"
+                echo -e "${RED}Invalid choice. Exiting...${NC}"
+                exit 1
+                ;;
+        esac
         
         setup_paths "$INSTALL_TYPE"
         log "INFO" "Set up paths for $INSTALL_TYPE installation"
