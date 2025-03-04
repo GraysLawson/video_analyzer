@@ -553,14 +553,31 @@ main() {
     local os=$(detect_os)
     log "INFO" "Detected system: $os on $arch"
 
-    # Check if script is running interactively
-    if [ -t 0 ]; then
-        INTERACTIVE=true
-        log "INFO" "Running in interactive mode"
-    else
-        INTERACTIVE=false
-        log "INFO" "Running in non-interactive mode"
+    # Check if script is running from pipe
+    if [ ! -t 0 ]; then
+        log "INFO" "Running from pipe, downloading script for proper interaction"
+        TMP_SCRIPT=$(mktemp)
+        log "INFO" "Created temporary script at: $TMP_SCRIPT"
+        
+        # Download script to temporary file
+        curl -sSL "https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh" > "$TMP_SCRIPT"
+        chmod +x "$TMP_SCRIPT"
+        
+        if [ -n "$1" ]; then
+            # If arguments provided, pass them through
+            log "INFO" "Executing with arguments: $*"
+            exec bash "$TMP_SCRIPT" "$@"
+        else
+            # No arguments, run in interactive mode
+            log "INFO" "Executing in interactive mode"
+            exec bash "$TMP_SCRIPT"
+        fi
+        exit 0
     fi
+
+    # Now we're running from a real terminal
+    INTERACTIVE=true
+    log "INFO" "Running in interactive mode from terminal"
 
     # Handle command line arguments first
     if [ -n "$1" ]; then
@@ -625,18 +642,29 @@ main() {
         esac
     fi
 
-    # Interactive mode
+    # Interactive installation process
     if check_installation; then
         current_version=$(get_current_version)
         log "INFO" "Found existing installation version: $current_version"
         echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
         
-        echo -e "Choose an option:"
-        echo -e "1) Update"
-        echo -e "2) Uninstall"
-        echo -e "3) Exit"
-        read -p "Enter your choice (1-3): " choice
-        log "INFO" "User selected option: $choice"
+        while true; do
+            echo -e "\nChoose an option:"
+            echo -e "1) Update"
+            echo -e "2) Uninstall"
+            echo -e "3) Exit"
+            read -p "Enter your choice (1-3): " choice
+            log "INFO" "User selected option: $choice"
+            
+            case $choice in
+                1|2|3)
+                    break
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
+                    ;;
+            esac
+        done
         
         case $choice in
             1)
@@ -659,21 +687,27 @@ main() {
                 echo -e "${YELLOW}Exiting...${NC}"
                 exit 0
                 ;;
-            *)
-                log "ERROR" "Invalid choice selected"
-                echo -e "${RED}Invalid choice. Exiting...${NC}"
-                exit 1
-                ;;
         esac
     else
         log "INFO" "No existing installation found"
         echo -e "${GREEN}Detected system: $os on $arch${NC}"
         
-        echo -e "Choose installation type:"
-        echo -e "1) System-wide (requires sudo)"
-        echo -e "2) User-local"
-        read -p "Enter your choice (1-2): " install_type
-        log "INFO" "User selected installation type: $install_type"
+        while true; do
+            echo -e "\nChoose installation type:"
+            echo -e "1) System-wide (requires sudo)"
+            echo -e "2) User-local"
+            read -p "Enter your choice (1-2): " install_type
+            log "INFO" "User selected installation type: $install_type"
+            
+            case $install_type in
+                1|2)
+                    break
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice. Please enter 1 or 2.${NC}"
+                    ;;
+            esac
+        done
         
         case $install_type in
             1)
@@ -681,11 +715,6 @@ main() {
                 ;;
             2)
                 INSTALL_TYPE="user"
-                ;;
-            *)
-                log "ERROR" "Invalid installation type selected"
-                echo -e "${RED}Invalid choice. Exiting...${NC}"
-                exit 1
                 ;;
         esac
         
@@ -712,6 +741,12 @@ main() {
     
     log "INFO" "Installation script finished"
     echo -e "${YELLOW}Installation log available at: $LOG_FILE${NC}"
+    
+    # Clean up temporary script if it exists
+    if [ -n "$TMP_SCRIPT" ] && [ -f "$TMP_SCRIPT" ]; then
+        log "INFO" "Cleaning up temporary script"
+        rm -f "$TMP_SCRIPT"
+    fi
 }
 
 # Run main installation with all arguments
