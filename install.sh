@@ -1,790 +1,277 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Repository information
-REPO_OWNER="GraysLawson"
-REPO_NAME="video_analyzer"
-
-# Default installation paths
-SYSTEM_INSTALL_DIR="/usr/local"
-USER_INSTALL_DIR="$HOME/.local"
-INSTALL_DIR=""
-VENV_DIR=""
-BIN_DIR=""
-BIN_PATH=""
-CONFIG_DIR=""
-BACKUP_DIR=""
-
-# Default installation type for non-interactive mode
-DEFAULT_INSTALL_TYPE="user"
-
-# Essential dependencies
-REQUIRED_PACKAGES=(
-    "ffmpeg"
-    "python3"
-    "python3-pip"
-    "python3-venv"
-    "python3-tk"
-)
-
-# Add logging configuration
-LOG_FILE="/tmp/video-analyzer-install.log"
-VERBOSE=false
-
-# Function to log messages
-log() {
-    local level="$1"
-    local message="$2"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
-    
-    if [ "$VERBOSE" = true ]; then
-        case "$level" in
-            "ERROR") echo -e "${RED}[$level] $message${NC}" ;;
-            "WARNING") echo -e "${YELLOW}[$level] $message${NC}" ;;
-            "INFO") echo -e "${GREEN}[$level] $message${NC}" ;;
-            *) echo "[$level] $message" ;;
-        esac
-    fi
+# ASCII Art Banner
+display_banner() {
+    echo -e "${BLUE}"
+    echo "##############################################"
+    echo "#                                            #"
+    echo "#            Video Analyzer                  #"
+    echo "#        Installation Assistant              #"
+    echo "#                                            #"
+    echo "##############################################"
+    echo -e "${NC}"
 }
 
-# Function to check if script is running in a terminal
-is_terminal() {
-    # More robust check for interactive terminal
-    if [ -t 0 ] && [ -t 1 ] && [ -z "$INSTALL_SCRIPT_REEXEC" ]; then
-        return 0  # Is a terminal
-    else
-        return 1  # Not a terminal
-    fi
+# Check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-# Function to setup installation paths
-setup_paths() {
-    local install_type=$1
-    if [ "$install_type" = "system" ]; then
-        INSTALL_DIR="$SYSTEM_INSTALL_DIR"
-        BIN_DIR="$SYSTEM_INSTALL_DIR/bin"
-    else
-        INSTALL_DIR="$USER_INSTALL_DIR"
-        BIN_DIR="$USER_INSTALL_DIR/bin"
-        mkdir -p "$BIN_DIR"
-    fi
-    
-    VENV_DIR="${INSTALL_DIR}/video-analyzer-env"
-    BIN_PATH="${BIN_DIR}/video-analyzer"
-    CONFIG_DIR="${INSTALL_DIR}/video-analyzer/config"
-    BACKUP_DIR="${INSTALL_DIR}/video-analyzer/backups"
-}
-
-# Function to detect if program is installed
-check_installation() {
-    if [ -d "$SYSTEM_INSTALL_DIR/video-analyzer-env" ]; then
-        setup_paths "system"
-        return 0
-    elif [ -d "$USER_INSTALL_DIR/video-analyzer-env" ]; then
-        setup_paths "user"
-        return 0
-    fi
-    return 1
-}
-
-# Function to backup configuration
-backup_config() {
-    if [ -d "$CONFIG_DIR" ]; then
-        echo -e "${YELLOW}Backing up configuration...${NC}"
-        mkdir -p "$BACKUP_DIR"
-        backup_name="config_backup_$(date +%Y%m%d_%H%M%S)"
-        cp -r "$CONFIG_DIR" "$BACKUP_DIR/$backup_name"
-        echo -e "${GREEN}Configuration backed up to: $BACKUP_DIR/$backup_name${NC}"
-    fi
-}
-
-# Function to restore configuration
-restore_config() {
-    if [ -d "$BACKUP_DIR" ]; then
-        latest_backup=$(ls -t "$BACKUP_DIR" | head -n1)
-        if [ -n "$latest_backup" ]; then
-            echo -e "${YELLOW}Restoring configuration from backup...${NC}"
-            mkdir -p "$CONFIG_DIR"
-            cp -r "$BACKUP_DIR/$latest_backup"/* "$CONFIG_DIR/"
-            echo -e "${GREEN}Configuration restored from: $latest_backup${NC}"
-        fi
-    fi
-}
-
-# Function to uninstall
-uninstall() {
-    log "INFO" "Starting uninstallation process"
-    echo -e "${YELLOW}Uninstalling video-analyzer...${NC}"
-    
-    local keep_deps="n"
-    local keep_config="n"
-    
-    if [ "$INTERACTIVE" = true ]; then
-        read -p "Keep system dependencies? (y/n): " keep_deps
-        read -p "Keep configuration files? (y/n): " keep_config
-    else
-        log "INFO" "Non-interactive mode: removing everything"
-    fi
-    
-    if [[ $keep_deps != "y" ]]; then
-        log "INFO" "Removing system dependencies"
-        echo -e "${YELLOW}Removing system dependencies...${NC}"
-        if command_exists apt-get; then
-            sudo apt-get remove -y "${REQUIRED_PACKAGES[@]}"
-        elif command_exists yum; then
-            sudo yum remove -y "${REQUIRED_PACKAGES[@]}"
-        elif command_exists dnf; then
-            sudo dnf remove -y "${REQUIRED_PACKAGES[@]}"
-        fi
-    else
-        log "INFO" "Keeping system dependencies"
-    fi
-    
-    if [[ $keep_config != "y" ]]; then
-        log "INFO" "Removing configuration files"
-        rm -rf "$CONFIG_DIR" "$BACKUP_DIR"
-    else
-        log "INFO" "Keeping configuration files"
-    fi
-    
-    # Remove virtual environment and binary
-    log "INFO" "Removing virtual environment and binary"
-    rm -rf "$VENV_DIR"
-    rm -f "$BIN_PATH"
-    
-    log "INFO" "Uninstallation complete"
-    echo -e "${GREEN}Uninstallation complete!${NC}"
-}
-
-# Function to get current version
-get_current_version() {
-    if [ -f "$VENV_DIR/lib/python"*"/site-packages/video_analyzer/__init__.py" ]; then
-        CURRENT_VERSION=$(grep "__version__" "$VENV_DIR"/lib/python*/site-packages/video_analyzer/__init__.py | cut -d'"' -f2)
-        echo "$CURRENT_VERSION"
+# Detect operating system
+detect_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "macos"
+    elif [[ -f /etc/debian_version ]]; then
+        echo "debian"
+    elif [[ -f /etc/redhat-release ]]; then
+        echo "redhat"
+    elif [[ -f /etc/arch-release ]]; then
+        echo "arch"
+    elif command_exists pacman; then
+        echo "arch"
+    elif command_exists apt-get; then
+        echo "debian"
+    elif command_exists dnf || command_exists yum; then
+        echo "redhat"
+    elif command_exists brew; then
+        echo "macos"
     else
         echo "unknown"
     fi
 }
 
-# Function to detect system architecture
+# Detect architecture
 detect_arch() {
     local arch=$(uname -m)
     case $arch in
         x86_64)
-            echo "x86_64"
+            echo "x64"
             ;;
-        aarch64|arm64)
-            echo "aarch64"
+        i386|i686)
+            echo "x86"
             ;;
-        armv7l|armv7)
-            echo "armv7l"
+        arm*|aarch*)
+            echo "arm"
             ;;
         *)
-            echo "unsupported"
+            echo "unknown"
             ;;
     esac
 }
 
-# Function to detect OS
-detect_os() {
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "linux"
-    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-        echo "windows"
-    else
-        echo "unsupported"
-    fi
-}
-
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Function to install system dependencies
+# Install system dependencies based on OS
 install_system_dependencies() {
     echo -e "${YELLOW}Installing system dependencies...${NC}"
-    if command_exists apt-get; then
-        sudo apt-get update
-        sudo apt-get install -y "${REQUIRED_PACKAGES[@]}"
-    elif command_exists yum; then
-        sudo yum install -y "${REQUIRED_PACKAGES[@]}"
-    elif command_exists dnf; then
-        sudo dnf install -y "${REQUIRED_PACKAGES[@]}"
-    else
-        echo -e "${RED}Could not install dependencies. Please install them manually:${NC}"
-        printf '%s\n' "${REQUIRED_PACKAGES[@]}"
+    
+    local os=$1
+    case $os in
+        macos)
+            if ! command_exists brew; then
+                echo -e "${YELLOW}Installing Homebrew...${NC}"
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            brew update
+            if ! command_exists python3; then
+                brew install python
+            fi
+            ;;
+        debian)
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip python3-venv
+            ;;
+        redhat)
+            if command_exists dnf; then
+                sudo dnf install -y python3 python3-pip python3-devel
+            else
+                sudo yum install -y python3 python3-pip python3-devel
+            fi
+            ;;
+        arch)
+            sudo pacman -Sy python python-pip
+            ;;
+        *)
+            echo -e "${RED}Unsupported operating system. Please install Python 3.7+ manually.${NC}"
+            exit 1
+            ;;
+    esac
+    
+    echo -e "${GREEN}System dependencies installed successfully!${NC}"
+}
+
+# Create virtual environment and install Python dependencies
+setup_python_environment() {
+    echo -e "${YELLOW}Setting up Python environment...${NC}"
+    
+    # Check if Python 3.7+ is installed
+    if ! command_exists python3; then
+        echo -e "${RED}Python 3 is not installed. Please install Python 3.7 or higher.${NC}"
         exit 1
     fi
-}
-
-# Function to install minimal dependencies
-install_minimal() {
-    echo -e "${YELLOW}Installing minimal dependencies...${NC}"
+    
+    # Check Python version
+    local python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+    local major_version=$(echo $python_version | cut -d. -f1)
+    local minor_version=$(echo $python_version | cut -d. -f2)
+    
+    if [[ $major_version -lt 3 || ($major_version -eq 3 && $minor_version -lt 7) ]]; then
+        echo -e "${RED}Python 3.7 or higher is required. You have Python $python_version.${NC}"
+        exit 1
+    fi
     
     # Create virtual environment
-    echo -e "${YELLOW}Creating virtual environment...${NC}"
-    python3 -m venv "$VENV_DIR"
-
+    local venv_dir=$1
+    echo -e "${YELLOW}Creating virtual environment in $venv_dir...${NC}"
+    python3 -m venv "$venv_dir"
+    
     # Activate virtual environment
-    source "$VENV_DIR/bin/activate"
-
-    # Install minimal dependencies
-    pip install --no-cache-dir \
-        tabulate \
-        tqdm \
-        colorama \
-        humanize
-
-    # Get Python version and create package directory
-    echo -e "${YELLOW}Creating package directory...${NC}"
-    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    PACKAGE_DIR="$VENV_DIR/lib/python${PYTHON_VERSION}/site-packages/video_analyzer"
-    mkdir -p "$PACKAGE_DIR"
-    mkdir -p "$CONFIG_DIR"
-
-    # Create the main script
-    echo -e "${YELLOW}Creating main script...${NC}"
-    cat > "$PACKAGE_DIR/__init__.py" << 'EOF'
-"""Video Analyzer - A tool for finding and managing duplicate video files."""
-__version__ = "1.0.0"
-EOF
-
-    cat > "$PACKAGE_DIR/__main__.py" << 'EOF'
-import os
-import sys
-import json
-import subprocess
-from pathlib import Path
-from tabulate import tabulate
-from tqdm import tqdm
-from colorama import init, Fore
-import humanize
-
-init()
-
-def get_video_info(file_path):
-    """Get video metadata using ffprobe."""
-    try:
-        cmd = [
-            'ffprobe', '-v', 'quiet', '-print_format', 'json',
-            '-show_format', '-show_streams', str(file_path)
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return json.loads(result.stdout)
-    except Exception as e:
-        print(f"{Fore.RED}Error processing {file_path}: {e}{Fore.RESET}")
-        return None
-
-def process_directory(directory):
-    """Process all video files in the directory."""
-    print(f"{Fore.BLUE}Scanning directory: {directory}{Fore.RESET}")
-
-    video_files = []
-    for ext in ('*.mp4', '*.mkv', '*.avi', '*.mov'):
-        video_files.extend(Path(directory).rglob(ext))
-
-    if not video_files:
-        print(f"{Fore.RED}No video files found{Fore.RESET}")
-        return
-
-    print(f"{Fore.GREEN}Found {len(video_files)} video files{Fore.RESET}")
-
-    # Prepare table data
-    table_data = []
-    for file in tqdm(video_files, desc="Processing"):
-        info = get_video_info(file)
-        if info:
-            size = os.path.getsize(file)
-            duration = float(info['format'].get('duration', 0))
-            
-            # Get video stream info
-            video_stream = next((s for s in info['streams'] if s['codec_type'] == 'video'), None)
-            resolution = 'N/A'
-            codec = 'N/A'
-            
-            if video_stream:
-                resolution = f"{video_stream.get('width', 'N/A')}x{video_stream.get('height', 'N/A')}"
-                codec = video_stream.get('codec_name', 'N/A')
-
-            table_data.append([
-                str(file),
-                humanize.naturalsize(size),
-                f"{int(duration//60)}m {int(duration%60)}s",
-                resolution,
-                codec
-            ])
-
-    # Print results in a nice table
-    if table_data:
-        headers = ["File", "Size", "Duration", "Resolution", "Codec"]
-        print("\n" + tabulate(table_data, headers=headers, tablefmt="grid"))
-        print(f"\n{Fore.GREEN}Analysis complete!{Fore.RESET}")
-
-def main():
-    # Check if DISPLAY is available
-    if os.environ.get('DISPLAY'):
-        try:
-            import tkinter as tk
-            from tkinter import filedialog, ttk
-            
-            class VideoAnalyzer(tk.Tk):
-                def __init__(self):
-                    super().__init__()
-
-                    self.title("Video Analyzer")
-                    self.geometry("800x600")
-
-                    # Create main frame
-                    self.main_frame = ttk.Frame(self)
-                    self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-                    # Create buttons frame
-                    self.button_frame = ttk.Frame(self.main_frame)
-                    self.button_frame.pack(fill=tk.X, pady=(0, 10))
-
-                    # Create Select Directory button
-                    self.select_btn = ttk.Button(
-                        self.button_frame,
-                        text="Select Directory",
-                        command=self.select_directory
-                    )
-                    self.select_btn.pack(side=tk.LEFT, padx=5)
-
-                    # Create progress bar
-                    self.progress = ttk.Progressbar(
-                        self.main_frame,
-                        orient=tk.HORIZONTAL,
-                        mode='determinate'
-                    )
-                    self.progress.pack(fill=tk.X, pady=(0, 10))
-
-                    # Create text widget for results
-                    self.text_widget = tk.Text(
-                        self.main_frame,
-                        wrap=tk.WORD,
-                        height=20,
-                        bg='white',
-                        fg='black'
-                    )
-                    self.text_widget.pack(fill=tk.BOTH, expand=True)
-
-                    # Create scrollbar
-                    scrollbar = ttk.Scrollbar(
-                        self.main_frame,
-                        orient=tk.VERTICAL,
-                        command=self.text_widget.yview
-                    )
-                    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-                    self.text_widget.configure(yscrollcommand=scrollbar.set)
-
-                    # Show initial message
-                    self.log_message("Welcome to Video Analyzer!", "blue")
-                    self.log_message("Click 'Select Directory' to choose a folder with videos.", "black")
-
-                def select_directory(self):
-                    directory = filedialog.askdirectory(
-                        title="Select Directory with Videos"
-                    )
-                    if directory:
-                        self.process_directory(directory)
-
-                def log_message(self, message, color="black"):
-                    self.text_widget.insert(tk.END, message + "\n")
-                    last_line = self.text_widget.get("end-2c linestart", "end-1c")
-                    self.text_widget.tag_add(color, f"end-{len(last_line)+1}c linestart", "end-1c")
-                    self.text_widget.tag_config("red", foreground="red")
-                    self.text_widget.tag_config("blue", foreground="blue")
-                    self.text_widget.tag_config("green", foreground="green")
-                    self.text_widget.see(tk.END)
-                    self.update()
-
-                def process_directory(self, directory):
-                    self.text_widget.delete(1.0, tk.END)
-                    self.log_message(f"Scanning directory: {directory}", "blue")
-
-                    video_files = []
-                    for ext in ('*.mp4', '*.mkv', '*.avi', '*.mov'):
-                        video_files.extend(Path(directory).rglob(ext))
-
-                    if not video_files:
-                        self.log_message("No video files found", "red")
-                        return
-
-                    self.log_message(f"Found {len(video_files)} video files", "green")
-                    self.progress['maximum'] = len(video_files)
-                    self.progress['value'] = 0
-
-                    for file in video_files:
-                        info = get_video_info(file)
-                        if info:
-                            size = os.path.getsize(file)
-                            duration = float(info['format'].get('duration', 0))
-                            self.log_message(f"\nFile: {file.name}", "blue")
-                            self.log_message(f"Size: {humanize.naturalsize(size)}")
-                            self.log_message(f"Duration: {int(duration//60)}m {int(duration%60)}s")
-                            
-                            video_stream = next((s for s in info['streams'] if s['codec_type'] == 'video'), None)
-                            if video_stream:
-                                resolution = f"{video_stream.get('width', 'N/A')}x{video_stream.get('height', 'N/A')}"
-                                self.log_message(f"Resolution: {resolution}")
-                                self.log_message(f"Codec: {video_stream.get('codec_name', 'N/A')}")
-
-                        self.progress['value'] += 1
-                        self.update()
-
-                    self.progress['value'] = 0
-                    self.log_message("\nAnalysis complete!", "green")
-
-            app = VideoAnalyzer()
-            app.mainloop()
-            
-        except ImportError:
-            use_cli = True
-    else:
-        use_cli = True
-
-    if use_cli:
-        print(f"{Fore.YELLOW}Using command line interface{Fore.RESET}")
-        while True:
-            print("\nEnter the directory path to scan (or 'q' to quit):")
-            directory = input("> ").strip()
-            
-            if directory.lower() == 'q':
-                break
-                
-            if not os.path.isdir(directory):
-                print(f"{Fore.RED}Error: Invalid directory path{Fore.RESET}")
-                continue
-                
-            process_directory(directory)
-
-if __name__ == '__main__':
-    main()
-EOF
-
-    # Create wrapper script
-    echo -e "${YELLOW}Creating wrapper script...${NC}"
-    cat > "$BIN_PATH" << 'EOF'
-#!/bin/bash
-
-# Function to check X11 forwarding and display availability
-check_x11() {
-    # Check if running in SSH session with X11 forwarding
-    if [ -n "$SSH_CLIENT" ] || [ -n "$SSH_TTY" ]; then
-        if [ -n "$DISPLAY" ]; then
-            # Verify X11 forwarding works
-            if command -v xdpyinfo >/dev/null 2>&1; then
-                if xdpyinfo >/dev/null 2>&1; then
-                    echo "ssh_x11"
-                    return 0
-                fi
-            fi
-        fi
-        echo "ssh_no_x11"
-        return 1
-    fi
-
-    # Check local X server
-    if [ -n "$DISPLAY" ]; then
-        if command -v xdpyinfo >/dev/null 2>&1; then
-            if xdpyinfo >/dev/null 2>&1; then
-                echo "local_x11"
-                return 0
-            fi
-        fi
-    fi
-
-    # Check if Wayland is available
-    if [ -n "$WAYLAND_DISPLAY" ]; then
-        if command -v xwayland >/dev/null 2>&1; then
-            echo "wayland"
-            return 0
-        fi
-    fi
-
-    echo "no_display"
-    return 1
+    source "$venv_dir/bin/activate"
+    
+    # Upgrade pip
+    pip install --upgrade pip
+    
+    # Install dependencies
+    echo -e "${YELLOW}Installing Python dependencies...${NC}"
+    pip install -e .
+    
+    echo -e "${GREEN}Python environment set up successfully!${NC}"
 }
 
-# Activate virtual environment
-source "VENV_DIR_PLACEHOLDER/bin/activate"
+# Install the application
+install_application() {
+    local install_dir=$1
+    local venv_dir=$2
+    
+    echo -e "${YELLOW}Installing Video Analyzer...${NC}"
+    
+    # Create launcher script
+    local launcher="$install_dir/video-analyzer"
+    
+    echo "#!/bin/bash" > "$launcher"
+    echo "source \"$venv_dir/bin/activate\"" >> "$launcher"
+    echo "python -m video_analyzer \"\$@\"" >> "$launcher"
+    echo "deactivate" >> "$launcher"
+    
+    chmod +x "$launcher"
+    
+    echo -e "${GREEN}Installation complete!${NC}"
+    echo -e "${CYAN}You can now run Video Analyzer by typing:${NC}"
+    echo -e "${CYAN}$launcher${NC}"
+    
+    # Ask if user wants to create a symbolic link
+    read -p "Do you want to create a symbolic link in /usr/local/bin? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ -w /usr/local/bin ]]; then
+            ln -sf "$launcher" /usr/local/bin/video-analyzer
+            echo -e "${GREEN}Symbolic link created. You can now run 'video-analyzer' from anywhere.${NC}"
+        else
+            echo -e "${YELLOW}Creating symbolic link with sudo...${NC}"
+            sudo ln -sf "$launcher" /usr/local/bin/video-analyzer
+            echo -e "${GREEN}Symbolic link created. You can now run 'video-analyzer' from anywhere.${NC}"
+        fi
+    fi
+}
 
-# Check display availability
-display_type=$(check_x11)
-
-case "$display_type" in
-    "ssh_x11")
-        echo "Using X11 forwarding over SSH"
-        python -m video_analyzer
-        ;;
-    "local_x11")
-        echo "Using local X11 display"
-        export DISPLAY="${DISPLAY:-:0}"
-        python -m video_analyzer
-        ;;
-    "wayland")
-        echo "Using Wayland display"
-        export DISPLAY="${WAYLAND_DISPLAY}"
-        python -m video_analyzer
-        ;;
-    *)
-        echo "No display available, using CLI mode"
-        unset DISPLAY
-        python -m video_analyzer
-        ;;
-esac
-EOF
-
-    # Replace placeholder with actual VENV_DIR
-    sed -i "s|VENV_DIR_PLACEHOLDER|$VENV_DIR|g" "$BIN_PATH"
-
-    # Make wrapper script executable
-    chmod +x "$BIN_PATH"
-
-    echo -e "${GREEN}Installation completed successfully!${NC}"
-    echo -e "${YELLOW}Run 'video-analyzer' to launch the program${NC}"
-    echo -e "${YELLOW}(GUI mode will be used if available, otherwise CLI mode)${NC}"
+# Build standalone executable
+build_executable() {
+    local install_dir=$1
+    local venv_dir=$2
+    
+    echo -e "${YELLOW}Building standalone executable...${NC}"
+    
+    # Activate virtual environment
+    source "$venv_dir/bin/activate"
+    
+    # Install development dependencies
+    pip install -e ".[dev]"
+    
+    # Run build script
+    python build.py
+    
+    # Copy executable to install directory
+    os=$(detect_os)
+    arch=$(detect_arch)
+    
+    local executable=""
+    if [[ "$os" == "macos" ]]; then
+        executable="dist/video-analyzer-macos"
+    else
+        executable="dist/video-analyzer"
+    fi
+    
+    if [[ -f "$executable" ]]; then
+        cp "$executable" "$install_dir/"
+        chmod +x "$install_dir/video-analyzer"
+        echo -e "${GREEN}Standalone executable built successfully!${NC}"
+        echo -e "${CYAN}You can find it at:${NC} $install_dir/video-analyzer"
+    else
+        echo -e "${RED}Failed to build standalone executable.${NC}"
+        echo -e "${YELLOW}Falling back to Python script version.${NC}"
+    fi
+    
+    # Deactivate virtual environment
+    deactivate
 }
 
 # Main installation function
 main() {
-    # Initialize log file
-    echo "=== Video Analyzer Installation Log ===" > "$LOG_FILE"
-    echo "Started at: $(date)" >> "$LOG_FILE"
-    log "INFO" "Starting installation script"
+    display_banner
     
-    local arch=$(detect_arch)
+    echo -e "${CYAN}Welcome to the Video Analyzer Installation Assistant!${NC}"
+    echo -e "${CYAN}This script will help you install Video Analyzer on your system.${NC}"
+    echo
+    
+    # Detect OS and architecture
     local os=$(detect_os)
-    log "INFO" "Detected system: $os on $arch"
-
-    # Determine if we're in interactive mode - do this first, before the re-exec check
-    if is_terminal; then
-        INTERACTIVE=true
-        log "INFO" "Running in interactive mode"
+    local arch=$(detect_arch)
+    echo -e "${CYAN}Detected operating system:${NC} $os"
+    echo -e "${CYAN}Detected architecture:${NC} $arch"
+    echo
+    
+    # Ask for installation directory
+    local default_install_dir="$HOME/.local/video-analyzer"
+    read -p "Enter installation directory [$default_install_dir]: " install_dir
+    install_dir=${install_dir:-$default_install_dir}
+    
+    # Create installation directory
+    mkdir -p "$install_dir"
+    echo -e "${GREEN}Installation directory created: $install_dir${NC}"
+    
+    # Virtual environment directory
+    local venv_dir="$install_dir/venv"
+    
+    # Ask for installation type
+    echo -e "${CYAN}Installation Options:${NC}"
+    echo "1. Python package (recommended)"
+    echo "2. Standalone executable (experimental)"
+    read -p "Select an option [1-2]: " -n 1 -r
+    echo
+    
+    # Install dependencies
+    install_system_dependencies "$os"
+    
+    if [[ $REPLY =~ ^[2]$ ]]; then
+        # Standalone executable
+        setup_python_environment "$venv_dir"
+        build_executable "$install_dir" "$venv_dir"
     else
-        INTERACTIVE=false
-        log "INFO" "Running in non-interactive mode"
-    fi
-
-    # Check if running from pipe and if we need to re-execute
-    # Only do this if we really want interactive mode
-    if [ "$INTERACTIVE" = true ] && [ ! -t 0 ] && [ -z "$INSTALL_SCRIPT_REEXEC" ]; then
-        log "INFO" "Running from pipe, downloading script for proper interaction"
-        TMP_SCRIPT=$(mktemp)
-        log "INFO" "Created temporary script at: $TMP_SCRIPT"
-        
-        # Download script to temporary file
-        curl -sSL "https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh" > "$TMP_SCRIPT"
-        chmod +x "$TMP_SCRIPT"
-        
-        # Set environment variable to prevent infinite loop
-        export INSTALL_SCRIPT_REEXEC=1
-        
-        # Execute the script with proper terminal handling
-        if [ -n "$1" ]; then
-            log "INFO" "Executing with arguments: $*"
-            exec script -qec "bash \"$TMP_SCRIPT\" $*" /dev/null
-        else
-            log "INFO" "Executing in interactive mode"
-            exec script -qec "bash \"$TMP_SCRIPT\"" /dev/null
-        fi
-        exit 0
-    fi
-
-    # Handle command line arguments first
-    if [ -n "$1" ]; then
-        log "INFO" "Command line argument provided: $1"
-        case "$1" in
-            install)
-                log "INFO" "Starting fresh installation"
-                INSTALL_TYPE="user"
-                setup_paths "$INSTALL_TYPE"
-                install_system_dependencies
-                install_minimal
-                log "INFO" "Installation completed successfully"
-                echo -e "${GREEN}Installation complete!${NC}"
-                echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
-                exit 0
-                ;;
-            install-system)
-                log "INFO" "Starting system-wide installation"
-                INSTALL_TYPE="system"
-                setup_paths "$INSTALL_TYPE"
-                install_system_dependencies
-                install_minimal
-                log "INFO" "Installation completed successfully"
-                echo -e "${GREEN}Installation complete!${NC}"
-                echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
-                exit 0
-                ;;
-            update)
-                if check_installation; then
-                    log "INFO" "Starting update process"
-                    echo -e "${YELLOW}Updating video-analyzer...${NC}"
-                    backup_config
-                    uninstall
-                    install_system_dependencies
-                    install_minimal
-                    restore_config
-                    log "INFO" "Update completed successfully"
-                    echo -e "${GREEN}Update complete!${NC}"
-                    echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
-                    exit 0
-                else
-                    log "ERROR" "Cannot update: video-analyzer is not installed"
-                    echo -e "${RED}Error: video-analyzer is not installed${NC}"
-                    exit 1
-                fi
-                ;;
-            uninstall)
-                if check_installation; then
-                    uninstall
-                    exit 0
-                else
-                    log "ERROR" "Cannot uninstall: video-analyzer is not installed"
-                    echo -e "${RED}Error: video-analyzer is not installed${NC}"
-                    exit 1
-                fi
-                ;;
-            *)
-                log "ERROR" "Invalid argument: $1"
-                echo -e "${RED}Invalid argument. Valid options are: install, install-system, update, uninstall${NC}"
-                exit 1
-                ;;
-        esac
-    fi
-
-    # Interactive installation process
-    if check_installation; then
-        current_version=$(get_current_version)
-        log "INFO" "Found existing installation version: $current_version"
-        echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
-        
-        if [ "$INTERACTIVE" = true ]; then
-            while true; do
-                echo -e "\nChoose an option:"
-                echo -e "1) Update"
-                echo -e "2) Uninstall"
-                echo -e "3) Exit"
-                read -p "Enter your choice (1-3): " choice
-                log "INFO" "User selected option: $choice"
-                
-                case $choice in
-                    1|2|3)
-                        break
-                        ;;
-                    *)
-                        echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
-                        ;;
-                esac
-            done
-        else
-            # Default action for non-interactive mode
-            log "INFO" "Non-interactive mode: defaulting to update"
-            choice=1
-        fi
-        
-        case $choice in
-            1)
-                log "INFO" "Starting update process"
-                echo -e "${YELLOW}Updating video-analyzer...${NC}"
-                backup_config
-                uninstall
-                install_system_dependencies
-                install_minimal
-                restore_config
-                log "INFO" "Update completed successfully"
-                echo -e "${GREEN}Update complete!${NC}"
-                echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
-                ;;
-            2)
-                uninstall
-                ;;
-            3)
-                log "INFO" "User chose to exit"
-                echo -e "${YELLOW}Exiting...${NC}"
-                exit 0
-                ;;
-        esac
-    else
-        log "INFO" "No existing installation found"
-        echo -e "${GREEN}Detected system: $os on $arch${NC}"
-        
-        if [ "$INTERACTIVE" = true ]; then
-            while true; do
-                echo -e "\nChoose installation type:"
-                echo -e "1) System-wide (requires sudo)"
-                echo -e "2) User-local"
-                echo -e "3) Exit"
-                
-                read -p "Enter your choice (1-3): " install_type
-                log "INFO" "User selected installation type: $install_type"
-                
-                case $install_type in
-                    1)
-                        INSTALL_TYPE="system"
-                        break
-                        ;;
-                    2)
-                        INSTALL_TYPE="user"
-                        break
-                        ;;
-                    3)
-                        log "INFO" "User chose to exit"
-                        echo -e "${YELLOW}Exiting...${NC}"
-                        exit 0
-                        ;;
-                    *)
-                        echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
-                        ;;
-                esac
-            done
-        else
-            # Default to user-local installation in non-interactive mode
-            log "INFO" "Non-interactive mode: defaulting to user-local installation"
-            INSTALL_TYPE="$DEFAULT_INSTALL_TYPE"
-            echo -e "${YELLOW}Non-interactive mode: Using default installation type ($INSTALL_TYPE)${NC}"
-        fi
-        
-        setup_paths "$INSTALL_TYPE"
-        log "INFO" "Set up paths for $INSTALL_TYPE installation"
-        
-        if [ "$INSTALL_TYPE" = "user" ]; then
-            # Add user's bin to PATH if not already there
-            if [[ ":$PATH:" != *":$USER_INSTALL_DIR/bin:"* ]]; then
-                log "INFO" "Adding user bin directory to PATH"
-                echo "export PATH=\"\$PATH:$USER_INSTALL_DIR/bin\"" >> ~/.bashrc
-                export PATH="$PATH:$USER_INSTALL_DIR/bin"
-            fi
-        fi
-        
-        log "INFO" "Starting installation process"
-        echo -e "${YELLOW}Installing video-analyzer...${NC}"
-        install_system_dependencies
-        install_minimal
-        log "INFO" "Installation completed successfully"
-        echo -e "${GREEN}Installation complete!${NC}"
-        echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
+        # Python package (default)
+        setup_python_environment "$venv_dir"
+        install_application "$install_dir" "$venv_dir"
     fi
     
-    log "INFO" "Installation script finished"
-    echo -e "${YELLOW}Installation log available at: $LOG_FILE${NC}"
-    
-    # Clean up temporary script if it exists
-    if [ -n "$TMP_SCRIPT" ] && [ -f "$TMP_SCRIPT" ]; then
-        log "INFO" "Cleaning up temporary script"
-        rm -f "$TMP_SCRIPT"
-    fi
+    echo
+    echo -e "${GREEN}Installation completed successfully!${NC}"
+    echo -e "${CYAN}Thank you for installing Video Analyzer!${NC}"
 }
 
-# Run main installation with all arguments
-main "$@"
+# Execute main function
+main 
