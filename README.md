@@ -1,5 +1,6 @@
 # Video Analyzer
 
+
 A powerful tool for finding and managing duplicate video files with different resolutions. This tool helps you identify duplicate videos, compare their quality, and manage storage space efficiently.
 
 <div align="center">
