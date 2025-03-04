@@ -91,9 +91,10 @@ install_minimal() {
         colorama \
         humanize
 
-    # Create package directory
+    # Get Python version and create package directory
     echo -e "${YELLOW}Creating package directory...${NC}"
-    PACKAGE_DIR="/usr/local/video-analyzer-env/lib/python3.*/site-packages/video_analyzer"
+    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    PACKAGE_DIR="/usr/local/video-analyzer-env/lib/python${PYTHON_VERSION}/site-packages/video_analyzer"
     mkdir -p "$PACKAGE_DIR"
 
     # Create the main script
@@ -167,6 +168,10 @@ class VideoAnalyzer(tk.Tk):
         )
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.text_widget.configure(yscrollcommand=scrollbar.set)
+
+        # Show initial message
+        self.log_message("Welcome to Video Analyzer!", "blue")
+        self.log_message("Click 'Select Directory' to choose a folder with videos.", "black")
 
     def select_directory(self):
         """Open directory selection dialog and process videos."""
