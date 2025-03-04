@@ -2,9 +2,32 @@ from msilib import Table
 import os
 import humanize
 from rich.console import Console
-from rich.menu import Menu
+from rich.prompt import Prompt
 from ..utils.display import DisplayManager
 from ..core.analyzer import VideoAnalyzer
+
+# Custom menu implementation to replace rich.menu
+class Menu:
+    def __init__(self, title, choices):
+        self.title = title
+        self.choices = choices
+        self.console = Console()
+    
+    def show(self):
+        self.console.print(f"\n[bold]{self.title}[/bold]\n")
+        for i, choice in enumerate(self.choices, 1):
+            self.console.print(f"  {i}. {choice}")
+        self.console.print()
+        
+        while True:
+            selection = Prompt.ask("Select an option", default="1")
+            try:
+                index = int(selection) - 1
+                if 0 <= index < len(self.choices):
+                    return index
+                self.console.print("[red]Invalid selection. Please try again.[/red]")
+            except ValueError:
+                self.console.print("[red]Please enter a number.[/red]")
 
 class MainMenu:
     def __init__(self, analyzer: VideoAnalyzer):
