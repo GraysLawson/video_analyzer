@@ -46,7 +46,7 @@ download_project() {
         # Clone the repository
         log "INFO" "Cloning repository to $project_dir"
         echo -e "${CYAN}Cloning repository...${NC}"
-        git clone https://github.com/username/video-analyzer.git "$project_dir" || {
+        git clone https://github.com/GraysLawson/video-analyzer.git "$project_dir" || {
             log "ERROR" "Failed to clone repository"
             echo -e "${RED}Failed to clone repository.${NC}"
             
