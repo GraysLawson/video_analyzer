@@ -20,6 +20,9 @@ BIN_PATH=""
 CONFIG_DIR=""
 BACKUP_DIR=""
 
+# Default installation type for non-interactive mode
+DEFAULT_INSTALL_TYPE="user"
+
 # Essential dependencies
 REQUIRED_PACKAGES=(
     "ffmpeg"
@@ -48,6 +51,11 @@ log() {
             *) echo "[$level] $message" ;;
         esac
     fi
+}
+
+# Function to check if script is running in a terminal
+is_terminal() {
+    [ -t 0 ] && [ -t 1 ]
 }
 
 # Function to setup installation paths
@@ -577,9 +585,14 @@ main() {
         exit 0
     fi
 
-    # Now we're running with proper terminal handling
-    INTERACTIVE=true
-    log "INFO" "Running in interactive mode"
+    # Determine if we're in interactive mode
+    if is_terminal; then
+        INTERACTIVE=true
+        log "INFO" "Running in interactive mode"
+    else
+        INTERACTIVE=false
+        log "INFO" "Running in non-interactive mode"
+    fi
 
     # Handle command line arguments first
     if [ -n "$1" ]; then
@@ -650,23 +663,29 @@ main() {
         log "INFO" "Found existing installation version: $current_version"
         echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
         
-        while true; do
-            echo -e "\nChoose an option:"
-            echo -e "1) Update"
-            echo -e "2) Uninstall"
-            echo -e "3) Exit"
-            read -p "Enter your choice (1-3): " choice
-            log "INFO" "User selected option: $choice"
-            
-            case $choice in
-                1|2|3)
-                    break
-                    ;;
-                *)
-                    echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
-                    ;;
-            esac
-        done
+        if [ "$INTERACTIVE" = true ]; then
+            while true; do
+                echo -e "\nChoose an option:"
+                echo -e "1) Update"
+                echo -e "2) Uninstall"
+                echo -e "3) Exit"
+                read -p "Enter your choice (1-3): " choice
+                log "INFO" "User selected option: $choice"
+                
+                case $choice in
+                    1|2|3)
+                        break
+                        ;;
+                    *)
+                        echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
+                        ;;
+                esac
+            done
+        else
+            # Default action for non-interactive mode
+            log "INFO" "Non-interactive mode: defaulting to update"
+            choice=1
+        fi
         
         case $choice in
             1)
@@ -694,40 +713,41 @@ main() {
         log "INFO" "No existing installation found"
         echo -e "${GREEN}Detected system: $os on $arch${NC}"
         
-        while true; do
-            echo -e "\nChoose installation type:"
-            echo -e "1) System-wide (requires sudo)"
-            echo -e "2) User-local"
-            echo -e "3) Exit"
-            
-            # Use read with timeout to ensure we get input
-            if ! read -t 300 -p "Enter your choice (1-3): " install_type; then
-                log "ERROR" "No input received within timeout"
-                echo -e "\n${RED}Error: No input received. Please run the script directly instead of piping.${NC}"
-                exit 1
-            fi
-            
-            log "INFO" "User selected installation type: $install_type"
-            
-            case $install_type in
-                1)
-                    INSTALL_TYPE="system"
-                    break
-                    ;;
-                2)
-                    INSTALL_TYPE="user"
-                    break
-                    ;;
-                3)
-                    log "INFO" "User chose to exit"
-                    echo -e "${YELLOW}Exiting...${NC}"
-                    exit 0
-                    ;;
-                *)
-                    echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
-                    ;;
-            esac
-        done
+        if [ "$INTERACTIVE" = true ]; then
+            while true; do
+                echo -e "\nChoose installation type:"
+                echo -e "1) System-wide (requires sudo)"
+                echo -e "2) User-local"
+                echo -e "3) Exit"
+                
+                read -p "Enter your choice (1-3): " install_type
+                log "INFO" "User selected installation type: $install_type"
+                
+                case $install_type in
+                    1)
+                        INSTALL_TYPE="system"
+                        break
+                        ;;
+                    2)
+                        INSTALL_TYPE="user"
+                        break
+                        ;;
+                    3)
+                        log "INFO" "User chose to exit"
+                        echo -e "${YELLOW}Exiting...${NC}"
+                        exit 0
+                        ;;
+                    *)
+                        echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
+                        ;;
+                esac
+            done
+        else
+            # Default to user-local installation in non-interactive mode
+            log "INFO" "Non-interactive mode: defaulting to user-local installation"
+            INSTALL_TYPE="$DEFAULT_INSTALL_TYPE"
+            echo -e "${YELLOW}Non-interactive mode: Using default installation type ($INSTALL_TYPE)${NC}"
+        fi
         
         setup_paths "$INSTALL_TYPE"
         log "INFO" "Set up paths for $INSTALL_TYPE installation"
