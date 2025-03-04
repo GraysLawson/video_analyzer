@@ -41,6 +41,78 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+4. Install the package in development mode:
+```bash
+# Make sure you're in the video_analyzer directory (where setup.py is located)
+pip install -e .
+
+# Verify installation
+python -c "import video_analyzer"
+```
+
+### Common Installation Issues
+
+1. **Module Not Found Error**:
+   If you see `No module named video_analyzer`, try these steps in order:
+   ```bash
+   # 1. Ensure you're in the correct directory
+   pwd  # or 'cd' on Windows
+   # Should show /path/to/video_analyzer
+   
+   # 2. Verify virtual environment is activated
+   # You should see (venv) at the start of your prompt
+   
+   # 3. Reinstall the package
+   pip uninstall video_analyzer  # Remove any old installations
+   pip install -e .
+   
+   # 4. Verify the installation
+   pip list | grep video_analyzer  # or 'pip list | findstr video_analyzer' on Windows
+   python -c "import video_analyzer"
+   ```
+
+2. **Permission Issues**:
+   If you get permission errors during installation:
+   ```bash
+   # Linux/MacOS
+   sudo chown -R $(whoami) .
+   pip install -e .
+   
+   # Windows (run as administrator)
+   pip install -e .
+   ```
+
+3. **Package Structure Issues**:
+   Verify your directory structure looks like this:
+   ```
+   video_analyzer/
+   ├── setup.py
+   ├── requirements.txt
+   └── src/
+       ├── __init__.py
+       ├── __main__.py
+       ├── core/
+       │   ├── __init__.py
+       │   ├── analyzer.py
+       │   └── ...
+       ├── ui/
+       │   ├── __init__.py
+       │   └── ...
+       └── utils/
+           ├── __init__.py
+           └── ...
+   ```
+
+4. **Running the Application**:
+   After successful installation, you can run the application in two ways:
+   ```bash
+   # Method 1: Using the installed console script
+   video-analyzer
+   
+   # Method 2: Using Python module syntax
+   python -m video_analyzer
+   ```
+
 ## Dependencies
 
 - Python 3.7 or higher
