@@ -13,6 +13,7 @@ from rich.table import Table
 from .core.analyzer import VideoAnalyzer
 from .ui.main_menu import MainMenu
 from .utils.display import DisplayManager
+from .utils.banner import show_banner
 
 def setup_logging(log_path=None):
     """Setup logging configuration"""
@@ -123,6 +124,10 @@ def process_video_batch(args):
     return results
 
 def main():
+    """Main entry point for the application."""
+    # Show the welcome banner
+    show_banner()
+    
     # Initialize colorama for cross-platform colored terminal output
     colorama.init(autoreset=True)
     

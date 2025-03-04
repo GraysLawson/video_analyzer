@@ -4,7 +4,14 @@ setup(
     name="video_analyzer",
     version="1.0.0",
     description="Find and manage duplicate video files with different resolutions",
-    author="Your Name",
+    author="GraysLawson",
+    author_email="grays@possumden.net",
+    url="https://github.com/GraysLawson/video_analyzer",
+    project_urls={
+        "Bug Tracker": "https://github.com/GraysLawson/video_analyzer/issues",
+        "Documentation": "https://github.com/GraysLawson/video_analyzer#readme",
+        "Source Code": "https://github.com/GraysLawson/video_analyzer",
+    },
     packages=find_packages(),
     install_requires=[
         'colorama',

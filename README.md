@@ -2,6 +2,15 @@
 
 A powerful tool for finding and managing duplicate video files with different resolutions. This tool helps you identify duplicate videos, compare their quality, and manage storage space efficiently.
 
+<div align="center">
+
+[![Author](https://img.shields.io/badge/Author-GraysLawson-blue)](mailto:grays@possumden.net)
+[![Bluesky](https://img.shields.io/badge/Bluesky-@grays.bsky.possumden.net-1DA1F2)](https://bsky.app/profile/grays.bsky.possumden.net)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-orange)](https://github.com/GraysLawson/video_analyzer/releases)
+
+</div>
+
 ## Features
 
 - 🔍 Smart duplicate detection using multiple criteria:
@@ -44,22 +53,94 @@ video_analyzer/
 ### Option 1: Standalone Executable (Recommended)
 
 1. Download the latest release for your platform:
-   - [Windows (video-analyzer.exe)](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer.exe)
-   - [Linux (video-analyzer)](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer)
-   - [macOS (video-analyzer)](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos)
+
+   **Windows**:
+   - Download [video-analyzer.exe](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer.exe)
+   - Or use PowerShell:
+     ```powershell
+     Invoke-WebRequest -Uri "https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer.exe" -OutFile "video-analyzer.exe"
+     ```
+
+   **Linux**:
+   - Using `wget`:
+     ```bash
+     wget https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer
+     ```
+   - Using `curl`:
+     ```bash
+     curl -L -o video-analyzer https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer
+     ```
+   - Using `aria2`:
+     ```bash
+     aria2c https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer
+     ```
+   - Direct browser download: [video-analyzer](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer)
+
+   **macOS**:
+   - Using `wget`:
+     ```bash
+     wget https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos -O video-analyzer
+     ```
+   - Using `curl`:
+     ```bash
+     curl -L -o video-analyzer https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos
+     ```
+   - Direct browser download: [video-analyzer-macos](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos)
 
 2. Install FFmpeg:
-   - **Windows**: Download from https://ffmpeg.org/download.html and add to PATH
-   - **Linux**: Run `sudo apt-get install ffmpeg`
-   - **MacOS**: Run `brew install ffmpeg`
+
+   **Windows**:
+   - Download from https://ffmpeg.org/download.html and add to PATH
+
+   **Linux**:
+   - Debian/Ubuntu:
+     ```bash
+     sudo apt-get update
+     sudo apt-get install ffmpeg
+     ```
+   - Fedora:
+     ```bash
+     sudo dnf install ffmpeg
+     ```
+   - CentOS/RHEL:
+     ```bash
+     sudo yum install epel-release
+     sudo yum install ffmpeg
+     ```
+   - Arch Linux:
+     ```bash
+     sudo pacman -S ffmpeg
+     ```
+   - OpenSUSE:
+     ```bash
+     sudo zypper install ffmpeg
+     ```
+
+   **macOS**:
+   ```bash
+   brew install ffmpeg
+   ```
 
 3. Run the program:
-   - **Windows**: Double-click `video-analyzer.exe` or run from command prompt
-   - **Linux/MacOS**: 
-     ```bash
-     chmod +x video-analyzer  # Make executable
-     ./video-analyzer        # Run the program
+
+   **Windows**:
+   - Double-click `video-analyzer.exe` or run from command prompt:
+     ```cmd
+     video-analyzer.exe
      ```
+
+   **Linux/macOS**:
+   ```bash
+   # Make executable
+   chmod +x video-analyzer
+   
+   # Run the program
+   ./video-analyzer
+   
+   # Optional: Move to system path for global access
+   sudo mv video-analyzer /usr/local/bin/
+   video-analyzer  # Can now be run from anywhere
+   ```
 
 ### Option 2: Python Package Installation
 
