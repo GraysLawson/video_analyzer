@@ -1,4 +1,4 @@
-from msilib import Table
+from rich.table import Table
 import os
 import humanize
 from rich.console import Console
