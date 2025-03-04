@@ -17,6 +17,7 @@ from .core.analyzer import VideoAnalyzer
 from .ui.main_menu import MainMenu
 from .utils.display import DisplayManager
 from .utils.banner import show_banner
+from .version import __version__, __build__, get_version_string
 
 # Global flag for graceful shutdown
 SHUTDOWN_REQUESTED = False
@@ -191,6 +192,7 @@ def parse_arguments():
     parser.add_argument("--dry-run", action="store_true", help="Perform a dry run (no deletions)")
     parser.add_argument("-m", "--move-to", help="Move files instead of deleting them")
     parser.add_argument("-n", "--non-interactive", action="store_true", help="Run in non-interactive mode")
+    parser.add_argument("--no-update-check", action="store_true", help="Disable update check")
     
     return parser.parse_args()
 
@@ -209,6 +211,18 @@ def main():
     # Show the welcome banner unless in non-interactive mode
     if not args.non_interactive:
         show_banner()
+        console = Console()
+        console.print(f"[cyan]Video Analyzer {get_version_string()}[/cyan]")
+        console.print()
+    
+    # Check for updates (unless in non-interactive mode or explicitly disabled)
+    if not args.non_interactive and not args.no_update_check:
+        from .utils.updater import UpdateChecker
+        update_checker = UpdateChecker(console=Console())
+        update_info = update_checker.check_for_updates()
+        if update_info:
+            console.print("[yellow]An update is available. You can update from the main menu.[/yellow]")
+            console.print()
     
     # Check dependencies
     if not check_dependencies():
@@ -262,6 +276,14 @@ def main():
         progress = display.create_progress_display(total_files)
         layout = display.create_status_layout()
         
+        # Add the progress panel to the layout - create a new slot for it
+        # First make sure the layout has room for progress
+        layout["right_panel"].split_column(
+            layout(name="progress", ratio=1),
+            layout(name="current_file", ratio=1),
+            layout(name="processing_log", ratio=2)
+        )
+        
         # Process files with live display
         with Live(layout, refresh_per_second=4) as live:
             # Add progress task
@@ -269,14 +291,16 @@ def main():
             layout["progress"].update(progress)
             
             def update_progress(filename):
+                # Log processing to update the display tracker
+                display.log_processing(filename)
+                
                 # Update progress
                 progress.advance(task)
                 
-                # Update current file display
-                display.current_file = os.path.basename(filename)
-                layout["current_file"].update(display.update_current_file_panel())
+                # Update the entire layout with latest info
+                display.update_layout(layout)
                 
-                # Update statistics
+                # Update additional statistics
                 display.duplicate_groups = len(analyzer.duplicates)
                 display.total_size = sum(sum(analyzer._get_file_size(f['path']) 
                                           for f in group) 
@@ -284,7 +308,6 @@ def main():
                 display.potential_savings = sum(sum(analyzer._get_file_size(f['path']) 
                                              for f in group[1:]) 
                                           for group in analyzer.duplicates.values())
-                layout["stats"].update(display.update_stats_panel())
             
             # Process files in parallel
             max_workers = min(os.cpu_count() or 4, 8)  # Limit to 8 workers max

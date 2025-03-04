@@ -10,6 +10,10 @@ NC="\033[0m" # No Color
 # Configure logging
 LOG_FILE="/tmp/video-analyzer-install-$(date +%Y%m%d%H%M%S).log"
 
+# GitHub repository information
+GITHUB_REPO="GraysLawson/video_analyzer"
+GITHUB_API_URL="https://api.github.com/repos/${GITHUB_REPO}"
+
 # Function to log messages
 log() {
     local level="$1"
@@ -24,6 +28,96 @@ init_logging() {
     local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
     echo "[$timestamp] [INFO] Starting Video Analyzer installation" > "$LOG_FILE"
     echo "[$timestamp] [INFO] Working directory: $(pwd)" >> "$LOG_FILE"
+}
+
+# Function to check for updates
+check_for_updates() {
+    local current_version="$1"
+    local current_build="$2"
+    
+    log "INFO" "Checking for updates (Current: $current_version, Build: $current_build)"
+    echo -e "${CYAN}Checking for updates...${NC}"
+    
+    # Use curl or wget to get latest release info
+    local latest_info=""
+    local download_success=false
+    
+    if command -v curl > /dev/null; then
+        log "INFO" "Using curl to check for updates"
+        latest_info=$(curl -s "${GITHUB_API_URL}/releases/latest")
+        download_success=true
+    elif command -v wget > /dev/null; then
+        log "INFO" "Using wget to check for updates"
+        latest_info=$(wget -q -O- "${GITHUB_API_URL}/releases/latest")
+        download_success=true
+    fi
+    
+    if [ "$download_success" = true ] && [ -n "$latest_info" ]; then
+        # Extract version from tag_name
+        local latest_version=$(echo "$latest_info" | grep -o '"tag_name":"[^"]*"' | sed 's/"tag_name":"\(.*\)"/\1/' | sed 's/^v//')
+        
+        # Extract build number from body
+        local latest_build=$(echo "$latest_info" | grep -o '"body":"[^"]*"' | grep -o 'Build: [0-9]*' | sed 's/Build: //')
+        
+        log "INFO" "Latest version: $latest_version, Latest build: $latest_build"
+        
+        if [ -n "$latest_version" ] && [ -n "$latest_build" ]; then
+            echo -e "${CYAN}Latest version: v${latest_version} (build ${latest_build})${NC}"
+            
+            # Compare versions
+            local current_major=$(echo "$current_version" | cut -d. -f1)
+            local current_minor=$(echo "$current_version" | cut -d. -f2)
+            local current_patch=$(echo "$current_version" | cut -d. -f3)
+            
+            local latest_major=$(echo "$latest_version" | cut -d. -f1)
+            local latest_minor=$(echo "$latest_version" | cut -d. -f2)
+            local latest_patch=$(echo "$latest_version" | cut -d. -f3)
+            
+            local is_newer=false
+            
+            # Compare major version
+            if [ "$latest_major" -gt "$current_major" ]; then
+                is_newer=true
+            elif [ "$latest_major" -eq "$current_major" ] && [ "$latest_minor" -gt "$current_minor" ]; then
+                is_newer=true
+            elif [ "$latest_major" -eq "$current_major" ] && [ "$latest_minor" -eq "$current_minor" ] && [ "$latest_patch" -gt "$current_patch" ]; then
+                is_newer=true
+            elif [ "$latest_major" -eq "$current_major" ] && [ "$latest_minor" -eq "$current_minor" ] && [ "$latest_patch" -eq "$current_patch" ] && [ "$latest_build" -gt "$current_build" ]; then
+                is_newer=true
+            fi
+            
+            if [ "$is_newer" = true ]; then
+                echo -e "${GREEN}A newer version is available: v${latest_version} (build ${latest_build})${NC}"
+                return 0  # Update available
+            else
+                echo -e "${GREEN}You have the latest version.${NC}"
+                return 1  # No update available
+            fi
+        else
+            log "WARNING" "Failed to parse latest version information"
+            echo -e "${YELLOW}Failed to parse latest version information.${NC}"
+            return 2  # Error checking for updates
+        fi
+    else
+        log "WARNING" "Failed to retrieve latest version information"
+        echo -e "${YELLOW}Failed to retrieve latest version information.${NC}"
+        return 2  # Error checking for updates
+    fi
+}
+
+# Function to extract current version from installed package
+get_current_version() {
+    local install_dir="$1"
+    local version_file="$install_dir/source/video_analyzer/version.py"
+    
+    if [ -f "$version_file" ]; then
+        local version=$(grep -o "__version__ = \"[^\"]*\"" "$version_file" | sed 's/__version__ = "\(.*\)"/\1/')
+        local build=$(grep -o "__build__ = \"[^\"]*\"" "$version_file" | sed 's/__build__ = "\(.*\)"/\1/')
+        
+        echo "$version,$build"
+    else
+        echo "0.0.0,0"  # Default if version file not found
+    fi
 }
 
 # Download project from GitHub
@@ -685,80 +779,135 @@ main() {
         log "INFO" "Found existing system-wide installation at $existing_path"
     fi
     
-    # Handle existing installation
-    local install_dir=""
-    local install_type="user"  # Default type
-    
+    # Check for updates if there's an existing installation
     if [[ -n "$existing_installation" ]]; then
         echo -e "${YELLOW}Existing installation detected:${NC} $existing_path"
-        echo -e "${CYAN}What would you like to do?${NC}"
-        echo "1. Update existing installation"
-        echo "2. Uninstall existing installation"
-        echo "3. Repair existing installation (fixes missing modules)"
-        echo "4. Install fresh copy in a different location"
-        echo "5. Cancel"
         
-        read -p "Select an option [1-5]: " -n 1 -r
-        echo
-        log "INFO" "User selected option: $REPLY for existing installation"
+        # Extract current version
+        local version_info=$(get_current_version "$existing_path")
+        local current_version=$(echo "$version_info" | cut -d, -f1)
+        local current_build=$(echo "$version_info" | cut -d, -f2)
         
-        case $REPLY in
-            1)  # Update
+        log "INFO" "Current version: $current_version, build: $current_build"
+        echo -e "${CYAN}Current version: v${current_version} (build ${current_build})${NC}"
+        
+        # Check for updates
+        if check_for_updates "$current_version" "$current_build"; then
+            # Update available
+            echo -e "${CYAN}Would you like to update?${NC}"
+            echo "1. Yes, update now"
+            echo "2. No, perform another action"
+            
+            read -p "Select an option [1-2]: " -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[1]$ ]]; then
                 log "INFO" "User chose to update existing installation"
                 echo -e "${CYAN}Updating existing installation...${NC}"
                 install_dir="$existing_path"
                 install_type="$existing_installation"
-                ;;
-            2)  # Uninstall
-                log "INFO" "User chose to uninstall existing installation"
-                if uninstall_application "$existing_path"; then
-                    echo -e "${CYAN}Would you like to install a fresh copy?${NC} (y/n)"
-                    read -p "" -n 1 -r
-                    echo
-                    
-                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                        log "INFO" "User chose not to reinstall after uninstall"
-                        echo -e "${GREEN}Uninstallation completed. Goodbye!${NC}"
+            else
+                # Continue with usual options menu
+                echo -e "${CYAN}What would you like to do?${NC}"
+                echo "1. Run installation again (repair/reinstall)"
+                echo "2. Uninstall existing installation"
+                echo "3. Install fresh copy in a different location"
+                echo "4. Cancel"
+                
+                read -p "Select an option [1-4]: " -n 1 -r
+                echo
+                log "INFO" "User selected option: $REPLY for existing installation"
+                
+                case $REPLY in
+                    1)  # Repair
+                        log "INFO" "User chose to repair existing installation"
+                        echo -e "${CYAN}Repairing existing installation...${NC}"
+                        install_dir="$existing_path"
+                        install_type="$existing_installation"
+                        ;;
+                    2)  # Uninstall
+                        log "INFO" "User chose to uninstall existing installation"
+                        if uninstall_application "$existing_path"; then
+                            echo -e "${CYAN}Would you like to install a fresh copy?${NC} (y/n)"
+                            read -p "" -n 1 -r
+                            echo
+                            
+                            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                                log "INFO" "User chose not to reinstall after uninstall"
+                                echo -e "${GREEN}Uninstallation completed. Goodbye!${NC}"
+                                exit 0
+                            fi
+                            # Continue with fresh installation
+                            log "INFO" "Continuing with fresh installation after uninstall"
+                        else
+                            log "ERROR" "Uninstallation failed. Exiting."
+                            echo -e "${RED}Uninstallation failed. Please check the logs.${NC}"
+                            exit 1
+                        fi
+                        ;;
+                    3)  # Fresh install in different location
+                        log "INFO" "User chose fresh installation in different location"
+                        echo -e "${CYAN}Proceeding with fresh installation...${NC}"
+                        # Continue with normal installation flow
+                        ;;
+                    *)  # Cancel or invalid
+                        log "INFO" "User cancelled installation"
+                        echo -e "${CYAN}Installation cancelled. Goodbye!${NC}"
                         exit 0
-                    fi
-                    # Continue with fresh installation
-                    log "INFO" "Continuing with fresh installation after uninstall"
-                else
-                    log "ERROR" "Uninstallation failed. Exiting."
-                    echo -e "${RED}Uninstallation failed. Please check the logs.${NC}"
-                    exit 1
-                fi
-                ;;
-            3)  # Repair
-                log "INFO" "User chose to repair existing installation"
-                if repair_installation "$existing_path"; then
-                    echo -e "${GREEN}Installation repaired successfully. Goodbye!${NC}"
-                    exit 0
-                else
-                    echo -e "${RED}Repair failed. Would you like to reinstall?${NC} (y/n)"
-                    read -p "" -n 1 -r
-                    echo
-                    
-                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                        log "INFO" "User chose not to reinstall after failed repair"
-                        echo -e "${YELLOW}Exiting without reinstallation.${NC}"
+                        ;;
+                esac
+            fi
+        else
+            # No update available or error checking for updates
+            echo -e "${CYAN}What would you like to do?${NC}"
+            echo "1. Run installation again (repair/reinstall)"
+            echo "2. Uninstall existing installation"
+            echo "3. Install fresh copy in a different location"
+            echo "4. Cancel"
+            
+            read -p "Select an option [1-4]: " -n 1 -r
+            echo
+            log "INFO" "User selected option: $REPLY for existing installation"
+            
+            case $REPLY in
+                1)  # Repair
+                    log "INFO" "User chose to repair existing installation"
+                    echo -e "${CYAN}Repairing existing installation...${NC}"
+                    install_dir="$existing_path"
+                    install_type="$existing_installation"
+                    ;;
+                2)  # Uninstall
+                    log "INFO" "User chose to uninstall existing installation"
+                    if uninstall_application "$existing_path"; then
+                        echo -e "${CYAN}Would you like to install a fresh copy?${NC} (y/n)"
+                        read -p "" -n 1 -r
+                        echo
+                        
+                        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                            log "INFO" "User chose not to reinstall after uninstall"
+                            echo -e "${GREEN}Uninstallation completed. Goodbye!${NC}"
+                            exit 0
+                        fi
+                        # Continue with fresh installation
+                        log "INFO" "Continuing with fresh installation after uninstall"
+                    else
+                        log "ERROR" "Uninstallation failed. Exiting."
+                        echo -e "${RED}Uninstallation failed. Please check the logs.${NC}"
                         exit 1
                     fi
-                    # Continue with fresh installation
-                    log "INFO" "Continuing with fresh installation after failed repair"
-                fi
-                ;;
-            4)  # Fresh install in different location
-                log "INFO" "User chose fresh installation in different location"
-                echo -e "${CYAN}Proceeding with fresh installation...${NC}"
-                # Continue with normal installation flow
-                ;;
-            *)  # Cancel or invalid
-                log "INFO" "User cancelled installation"
-                echo -e "${CYAN}Installation cancelled. Goodbye!${NC}"
-                exit 0
-                ;;
-        esac
+                    ;;
+                3)  # Fresh install in different location
+                    log "INFO" "User chose fresh installation in different location"
+                    echo -e "${CYAN}Proceeding with fresh installation...${NC}"
+                    # Continue with normal installation flow
+                    ;;
+                *)  # Cancel or invalid
+                    log "INFO" "User cancelled installation"
+                    echo -e "${CYAN}Installation cancelled. Goodbye!${NC}"
+                    exit 0
+                    ;;
+            esac
+        fi
     fi
     
     # Ask for installation type if not updating

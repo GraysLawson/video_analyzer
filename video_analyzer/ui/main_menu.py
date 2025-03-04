@@ -68,6 +68,7 @@ class MainMenu:
                 ("5", "Review Selected Files"),
                 ("6", "Execute Deletion"),
                 ("7", "Filter by Resolution"),
+                ("8", "Check for Updates"),
                 ("q", "Quit")
             ]
             
@@ -90,8 +91,13 @@ class MainMenu:
                 self._execute_deletion()
             elif choice == '7':
                 self._filter_by_resolution()
+            elif choice == '8':
+                self._update_software()
             elif choice == 'q':
-                break
+                return
+            else:
+                self.console.print("[red]Invalid choice. Please try again.[/red]")
+                input("Press Enter to continue...")
     
     def _show_duplicate_groups(self):
         """Display duplicate groups with enhanced resolution comparison."""
@@ -601,4 +607,50 @@ class MainMenu:
                 filtered_groups[group_name] = files
         
         # Show filtered groups
-        self._display_group_list(filtered_groups, f"Groups with {selected_resolution} Resolution") 
+        self._display_group_list(filtered_groups, f"Groups with {selected_resolution} Resolution")
+    
+    def _update_software(self):
+        """Check for updates and apply them if available."""
+        from ..utils.updater import UpdateChecker, update_from_github
+        
+        self.console.clear()
+        self.console.print("[bold cyan]Software Update[/bold cyan]")
+        self.console.print()
+        
+        # Create UpdateChecker instance
+        update_checker = UpdateChecker(console=self.console)
+        
+        # Check for updates
+        update_info = update_checker.check_for_updates()
+        
+        if update_info:
+            # Show update details
+            self.console.print(f"[green]New version available: v{update_info['version']} (build {update_info['build']})[/green]")
+            self.console.print(f"[cyan]Published: {update_info['published_at']}[/cyan]")
+            self.console.print()
+            
+            # Ask user if they want to update
+            if Confirm.ask("Do you want to update now?"):
+                # Get the installation path
+                install_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                
+                # Apply the update
+                try:
+                    self.console.print("[cyan]Starting update process...[/cyan]")
+                    success = update_from_github(install_path)
+                    
+                    if success:
+                        self.console.print("[green]Update completed successfully![/green]")
+                        self.console.print("[yellow]Please restart the application to use the new version.[/yellow]")
+                        if Confirm.ask("Restart now?"):
+                            self.console.print("[cyan]Restarting...[/cyan]")
+                            # Exit with special code to signal restart
+                            os._exit(42)  # Special exit code that can be detected by wrapper script
+                    else:
+                        self.console.print("[red]Update failed. Please try again later or update manually.[/red]")
+                except Exception as e:
+                    self.console.print(f"[red]Error during update: {str(e)}[/red]")
+        else:
+            self.console.print("[green]You have the latest version.[/green]")
+        
+        input("\nPress Enter to return to the main menu...") 

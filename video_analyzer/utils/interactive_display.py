@@ -6,6 +6,7 @@ from rich import box
 from datetime import datetime
 import os
 from rich.table import Table
+from rich.live import Live
 
 class InteractiveDisplayMixin:
     """Mixin class providing interactive display functionality for the DisplayManager."""
@@ -34,17 +35,40 @@ class InteractiveDisplayMixin:
         
         # Split right panel for current file and log
         layout["right_panel"].split_column(
-            Layout(name="progress", ratio=1),
             Layout(name="current_file", ratio=1),
             Layout(name="processing_log", ratio=2)
         )
         
+        # Initialize all panels
+        self.initialize_layout(layout)
+        
         return layout
+    
+    def initialize_layout(self, layout: Layout) -> None:
+        """Initialize all layout panels with empty content to avoid displaying layout debug info."""
+        # Initialize header
+        layout["header"].update(self.create_header_panel())
+        
+        # Initialize the stats panel
+        layout["stats"].update(self.update_stats_panel())
+        
+        # Initialize charts with empty panel
+        layout["charts"].update(Panel(
+            Text("Charts will appear here when data is available...", justify="center"),
+            title="[bold blue]Analysis Charts[/bold blue]",
+            border_style="blue"
+        ))
+        
+        # Initialize current file panel
+        layout["current_file"].update(self.update_current_file_panel())
+        
+        # Initialize processing log panel
+        layout["processing_log"].update(self.update_processing_log_panel())
     
     def update_current_file_panel(self) -> Panel:
         """Create a panel showing the current file being processed with progress info."""
         # Display the current filename prominently
-        if hasattr(self, 'current_file'):
+        if hasattr(self, 'current_file') and self.current_file:
             current_file_text = f"[bold]{self.current_file}[/bold]"
             
             # Create a progress representation
@@ -104,12 +128,50 @@ class InteractiveDisplayMixin:
     
     def update_layout(self, layout: Layout) -> None:
         """Update all panels in the layout with the latest information."""
-        # Update the header
-        layout["header"].update(self.create_header_panel())
+        try:
+            # Update the header
+            layout["header"].update(self.create_header_panel())
+            
+            # Update the statistics panel
+            layout["stats"].update(self.update_stats_panel())
+            
+            # Update the current file panel
+            layout["current_file"].update(self.update_current_file_panel())
+            
+            # Update the processing log panel
+            layout["processing_log"].update(self.update_processing_log_panel())
+            
+            # The progress panel is updated separately in __main__.py
+        except Exception as e:
+            # If there's an error updating the layout, at least show an error message
+            self.console.print(f"[bold red]Error updating layout: {str(e)}[/bold red]")
+    
+    def run_with_live_display(self, callback, *args, **kwargs):
+        """Run a callback function with a live-updating display."""
+        layout = self.create_status_layout()
         
-        # Update the statistics panel
-        layout["stats"].update(self.update_stats_panel())
+        # Add the progress panel if needed for this display
+        if not "progress" in layout["right_panel"]:
+            layout["right_panel"].split_column(
+                Layout(name="progress", ratio=1),
+                Layout(name="current_file", ratio=1),
+                Layout(name="processing_log", ratio=2)
+            )
         
-        # Update the current file and processing log panels
-        layout["current_file"].update(self.update_current_file_panel())
-        layout["processing_log"].update(self.update_processing_log_panel()) 
+        with Live(layout, refresh_per_second=4, screen=True) as live:
+            self.live = live
+            try:
+                # Run the callback, which should periodically update the layout
+                result = callback(*args, **kwargs)
+                # Final update after completion
+                self.update_layout(layout)
+                live.refresh()
+                return result
+            except Exception as e:
+                # Show error in the layout
+                layout["header"].update(Panel(
+                    Text(f"ERROR: {str(e)}", style="bold red"),
+                    style="bold red on black"
+                ))
+                live.refresh()
+                raise 

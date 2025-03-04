@@ -1,0 +1,36 @@
+name: Update Version
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'video_analyzer/version.py'
+      - '.github/**'
+      - 'README.md'
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Update version
+        run: |
+          python scripts/update_version.py --increment patch
+      
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add video_analyzer/version.py
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update version [skip ci]"
+          git push 
