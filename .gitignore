@@ -33,4 +33,7 @@ ENV/
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Release notes
+release_notes_*.md 

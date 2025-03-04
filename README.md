@@ -356,3 +356,53 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Security and Verification
+
+### Verifying Downloads
+Each release includes SHA256 checksums and GPG signatures (for Linux) to verify the authenticity of the binaries:
+
+1. Download both the binary and its corresponding `.sha256` file
+2. Verify the checksum:
+   ```bash
+   # On Linux/macOS:
+   sha256sum -c video-analyzer.sha256
+
+   # On Windows (PowerShell):
+   $fileHash = Get-FileHash -Algorithm SHA256 video-analyzer.exe
+   $expectedHash = Get-Content video-analyzer.exe.sha256
+   if ($fileHash.Hash -eq $expectedHash) { "Verification successful" }
+   ```
+
+### Windows SmartScreen Warning
+When running the executable for the first time, Windows SmartScreen might show a warning. This is normal for new, unsigned applications. To run the program:
+
+1. Click "More info" in the SmartScreen popup
+2. Click "Run anyway"
+
+### Alternative Installation
+If you prefer not to use the pre-built binary, you can install from source:
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/video-analyzer.git
+cd video-analyzer
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Linux/macOS
+.\venv\Scripts\activate   # On Windows
+
+# Install the package
+pip install -e .
+
+# Run the analyzer
+python -m video_analyzer
+```
+
+### Build Information
+Each binary includes a `build_info.txt` file with:
+- Build date and time
+- Source code commit hash
+- Repository URL
+
+You can extract this information from the binary to verify its origin.
