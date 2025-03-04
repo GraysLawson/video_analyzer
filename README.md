@@ -44,9 +44,9 @@ video_analyzer/
 ### Option 1: Standalone Executable (Recommended)
 
 1. Download the latest release for your platform:
-   - [Windows (video-analyzer.exe)](https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer.exe)
-   - [Linux (video-analyzer)](https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer)
-   - [macOS (video-analyzer)](https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer-macos)
+   - [Windows (video-analyzer.exe)](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer.exe)
+   - [Linux (video-analyzer)](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer)
+   - [macOS (video-analyzer)](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos)
 
 2. Install FFmpeg:
    - **Windows**: Download from https://ffmpeg.org/download.html and add to PATH
