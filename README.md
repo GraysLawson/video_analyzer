@@ -55,37 +55,37 @@ video_analyzer/
 1. Download the latest release for your platform:
 
    **Windows**:
-   - Download [video-analyzer.exe](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer.exe)
+   - Download [video-analyzer.exe](https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer.exe)
    - Or use PowerShell:
      ```powershell
-     Invoke-WebRequest -Uri "https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer.exe" -OutFile "video-analyzer.exe"
+     Invoke-WebRequest -Uri "https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer.exe" -OutFile "video-analyzer.exe"
      ```
 
    **Linux**:
    - Using `wget`:
      ```bash
-     wget https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer
+     wget https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer
      ```
    - Using `curl`:
      ```bash
-     curl -L -o video-analyzer https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer
+     curl -L -o video-analyzer https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer
      ```
    - Using `aria2`:
      ```bash
-     aria2c https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer
+     aria2c https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer
      ```
-   - Direct browser download: [video-analyzer](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer)
+   - Direct browser download: [video-analyzer](https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer)
 
    **macOS**:
    - Using `wget`:
      ```bash
-     wget https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos -O video-analyzer
+     wget https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer-macos -O video-analyzer
      ```
    - Using `curl`:
      ```bash
-     curl -L -o video-analyzer https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos
+     curl -L -o video-analyzer https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer-macos
      ```
-   - Direct browser download: [video-analyzer-macos](https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos)
+   - Direct browser download: [video-analyzer-macos](https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer-macos)
 
 2. Install FFmpeg:
 

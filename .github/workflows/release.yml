@@ -1,0 +1,51 @@
+name: Build Release Binaries
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }} Binary
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            asset_name: video-analyzer
+            asset_content_type: application/x-executable
+          - os: windows-latest
+            asset_name: video-analyzer.exe
+            asset_content_type: application/x-msdownload
+          - os: macos-latest
+            asset_name: video-analyzer-macos
+            asset_content_type: application/x-executable
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[dev]
+
+    - name: Build binary
+      run: |
+        python -m PyInstaller --clean --onefile --name=${{ matrix.asset_name }} --add-data="README.md:." video_analyzer/__main__.py
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./dist/${{ matrix.asset_name }}
+        asset_name: ${{ matrix.asset_name }}
+        asset_content_type: ${{ matrix.asset_content_type }} 

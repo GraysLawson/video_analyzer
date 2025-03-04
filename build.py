@@ -2,6 +2,7 @@ import os
 import platform
 import subprocess
 import sys
+from PyInstaller.__main__ import run as pyinstaller_run
 
 def run_command(command):
     """Run a command and return its output."""
@@ -22,72 +23,41 @@ def build_executable():
     if not run_command("pip install -e .[dev]"):
         return False
 
-    # Create spec file with custom options
-    spec_content = """
-# -*- mode: python ; coding: utf-8 -*-
-
-block_cipher = None
-
-a = Analysis(
-    ['video_analyzer/__main__.py'],
-    pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='video-analyzer',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
-"""
+    print(f"\nBuilding executable for {system}...")
     
-    with open("video_analyzer.spec", "w") as f:
-        f.write(spec_content.strip())
-
-    # Build the executable
-    print(f"Building executable for {system}...")
-    if not run_command("pyinstaller --clean video_analyzer.spec"):
-        return False
-
-    # Create dist directory if it doesn't exist
-    os.makedirs("dist", exist_ok=True)
-
-    print("\nBuild completed successfully!")
-    print("\nExecutable location:")
+    # Define PyInstaller options
+    options = [
+        'video_analyzer/__main__.py',  # Script to build
+        '--name=video-analyzer',       # Output name
+        '--onefile',                   # Create single executable
+        '--clean',                     # Clean cache
+        '--noconsole',                # No console window (Windows only)
+        '--add-data=README.md:.',     # Include README
+        '--icon=NONE'                 # No icon for now
+    ]
+    
     if system == "windows":
-        print("  dist\\video-analyzer.exe")
+        options.append('--console')  # Show console on Windows
+        output_name = "video-analyzer.exe"
+    elif system == "darwin":
+        output_name = "video-analyzer-macos"
     else:
-        print("  dist/video-analyzer")
+        output_name = "video-analyzer"
     
-    return True
+    try:
+        pyinstaller_run(options)
+        
+        # Create dist directory if it doesn't exist
+        os.makedirs("dist", exist_ok=True)
+        
+        print("\nBuild completed successfully!")
+        print("\nExecutable location:")
+        print(f"  dist/{output_name}")
+        
+        return True
+    except Exception as e:
+        print(f"\nError during build: {str(e)}", file=sys.stderr)
+        return False
 
 if __name__ == "__main__":
     if build_executable():
