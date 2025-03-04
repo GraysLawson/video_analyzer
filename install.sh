@@ -553,8 +553,8 @@ main() {
     local os=$(detect_os)
     log "INFO" "Detected system: $os on $arch"
 
-    # Check if script is running from pipe
-    if [ ! -t 0 ]; then
+    # Check if running from pipe and if we need to re-execute
+    if [ ! -t 0 ] && [ -z "$INSTALL_SCRIPT_REEXEC" ]; then
         log "INFO" "Running from pipe, downloading script for proper interaction"
         TMP_SCRIPT=$(mktemp)
         log "INFO" "Created temporary script at: $TMP_SCRIPT"
@@ -563,21 +563,23 @@ main() {
         curl -sSL "https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh" > "$TMP_SCRIPT"
         chmod +x "$TMP_SCRIPT"
         
+        # Set environment variable to prevent infinite loop
+        export INSTALL_SCRIPT_REEXEC=1
+        
+        # Execute the script with proper terminal handling
         if [ -n "$1" ]; then
-            # If arguments provided, pass them through
             log "INFO" "Executing with arguments: $*"
-            exec bash "$TMP_SCRIPT" "$@"
+            exec script -qec "bash \"$TMP_SCRIPT\" $*" /dev/null
         else
-            # No arguments, run in interactive mode
             log "INFO" "Executing in interactive mode"
-            exec bash "$TMP_SCRIPT"
+            exec script -qec "bash \"$TMP_SCRIPT\"" /dev/null
         fi
         exit 0
     fi
 
-    # Now we're running from a real terminal
+    # Now we're running with proper terminal handling
     INTERACTIVE=true
-    log "INFO" "Running in interactive mode from terminal"
+    log "INFO" "Running in interactive mode"
 
     # Handle command line arguments first
     if [ -n "$1" ]; then
@@ -696,27 +698,36 @@ main() {
             echo -e "\nChoose installation type:"
             echo -e "1) System-wide (requires sudo)"
             echo -e "2) User-local"
-            read -p "Enter your choice (1-2): " install_type
+            echo -e "3) Exit"
+            
+            # Use read with timeout to ensure we get input
+            if ! read -t 300 -p "Enter your choice (1-3): " install_type; then
+                log "ERROR" "No input received within timeout"
+                echo -e "\n${RED}Error: No input received. Please run the script directly instead of piping.${NC}"
+                exit 1
+            fi
+            
             log "INFO" "User selected installation type: $install_type"
             
             case $install_type in
-                1|2)
+                1)
+                    INSTALL_TYPE="system"
                     break
                     ;;
+                2)
+                    INSTALL_TYPE="user"
+                    break
+                    ;;
+                3)
+                    log "INFO" "User chose to exit"
+                    echo -e "${YELLOW}Exiting...${NC}"
+                    exit 0
+                    ;;
                 *)
-                    echo -e "${RED}Invalid choice. Please enter 1 or 2.${NC}"
+                    echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
                     ;;
             esac
         done
-        
-        case $install_type in
-            1)
-                INSTALL_TYPE="system"
-                ;;
-            2)
-                INSTALL_TYPE="user"
-                ;;
-        esac
         
         setup_paths "$INSTALL_TYPE"
         log "INFO" "Set up paths for $INSTALL_TYPE installation"
