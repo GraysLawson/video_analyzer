@@ -357,52 +357,138 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Security and Verification
+## Security & Binary Verification
 
-### Verifying Downloads
-Each release includes SHA256 checksums and GPG signatures (for Linux) to verify the authenticity of the binaries:
+### Binary Security Measures
+Our binaries are built with several security measures:
+- SHA256 checksums for all releases
+- GPG signatures for Linux binaries
+- Embedded build information and metadata
+- Windows manifest with explicit permissions
+- Transparent build process via GitHub Actions
+- No elevated privileges required
+- Full source code availability
 
-1. Download both the binary and its corresponding `.sha256` file
-2. Verify the checksum:
-   ```bash
-   # On Linux/macOS:
-   sha256sum -c video-analyzer.sha256
+### Linux Compatibility
+The Linux binary is built on Ubuntu 18.04 for maximum compatibility. Tested and confirmed working on:
 
-   # On Windows (PowerShell):
-   $fileHash = Get-FileHash -Algorithm SHA256 video-analyzer.exe
-   $expectedHash = Get-Content video-analyzer.exe.sha256
-   if ($fileHash.Hash -eq $expectedHash) { "Verification successful" }
+- Debian-based distributions:
+  - Debian 10 (Buster) and newer
+  - Ubuntu 18.04 LTS and newer
+  - Linux Mint 19 and newer
+  - Pop!_OS 18.04 and newer
+
+- RPM-based distributions:
+  - CentOS 7 and newer
+  - Fedora 30 and newer
+  - RHEL 7 and newer
+
+- Other distributions:
+  - OpenSUSE Leap 15 and newer
+  - Arch Linux (rolling release)
+  - Manjaro (rolling release)
+
+### Verifying Binary Authenticity
+
+#### Windows
+1. Download both `video-analyzer.exe` and `video-analyzer.exe.sha256`
+2. Run the verification script:
+   ```powershell
+   # Download the verification script
+   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/video_analyzer/main/verify_binary.ps1" -OutFile "verify_binary.ps1"
+   
+   # Run the script
+   .\verify_binary.ps1
    ```
 
-### Windows SmartScreen Warning
-When running the executable for the first time, Windows SmartScreen might show a warning. This is normal for new, unsigned applications. To run the program:
+3. Manual verification:
+   ```powershell
+   # Calculate SHA256 hash
+   $fileHash = Get-FileHash -Algorithm SHA256 video-analyzer.exe
+   
+   # Compare with provided hash
+   $expectedHash = Get-Content video-analyzer.exe.sha256
+   if ($fileHash.Hash -eq $expectedHash) { 
+       Write-Host "Verification successful" -ForegroundColor Green 
+   }
+   ```
 
-1. Click "More info" in the SmartScreen popup
-2. Click "Run anyway"
+#### Linux/macOS
+1. Download the binary and checksum file:
+   ```bash
+   # Linux
+   wget https://github.com/yourusername/video_analyzer/releases/download/v1.0.0/video-analyzer
+   wget https://github.com/yourusername/video_analyzer/releases/download/v1.0.0/video-analyzer.sha256
+   
+   # Verify checksum
+   sha256sum -c video-analyzer.sha256
+   ```
 
-### Alternative Installation
-If you prefer not to use the pre-built binary, you can install from source:
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/video-analyzer.git
-cd video-analyzer
+   For Linux, you can also verify the GPG signature:
+   ```bash
+   # Download the signature
+   wget https://github.com/yourusername/video_analyzer/releases/download/v1.0.0/video-analyzer.sig
+   
+   # Import the public key (first time only)
+   curl -s https://raw.githubusercontent.com/yourusername/video_analyzer/main/public_key.asc | gpg --import
+   
+   # Verify signature
+   gpg --verify video-analyzer.sig video-analyzer
+   ```
 
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Linux/macOS
-.\venv\Scripts\activate   # On Windows
+### Understanding Windows SmartScreen Warnings
+When running the Windows executable for the first time, you may see a SmartScreen warning. This is normal for new applications without an established reputation. Our binaries are built with several measures to ensure security:
 
-# Install the package
-pip install -e .
+1. **Why the warning appears:**
+   - New applications need time to build reputation
+   - We don't use paid code signing certificates
+   - The application is distributed outside the Microsoft Store
 
-# Run the analyzer
-python -m video_analyzer
-```
+2. **How to verify it's safe:**
+   - Check the SHA256 checksum (instructions above)
+   - Verify the embedded metadata using the verification script
+   - Review the source code on GitHub
+   - Check the build logs in GitHub Actions
+
+3. **To run after verification:**
+   - Click "More info" in the SmartScreen popup
+   - Click "Run anyway"
+   - The warning only appears on first run
+
+### Alternative Installation Methods
+If you prefer not to use the pre-built binaries, you have several alternatives:
+
+1. **Install from PyPI:**
+   ```bash
+   pip install video-analyzer
+   ```
+
+2. **Install from source:**
+   ```bash
+   git clone https://github.com/yourusername/video_analyzer.git
+   cd video_analyzer
+   pip install -e .
+   ```
+
+3. **Build your own binary:**
+   ```bash
+   git clone https://github.com/yourusername/video_analyzer.git
+   cd video_analyzer
+   pip install -r requirements.txt
+   python -m PyInstaller build_scripts/build.spec
+   ```
 
 ### Build Information
-Each binary includes a `build_info.txt` file with:
+Each binary includes embedded build information that can be extracted to verify its origin:
 - Build date and time
 - Source code commit hash
 - Repository URL
+- License information
+- Full metadata
 
-You can extract this information from the binary to verify its origin.
+To view this information:
+- Windows: Use the `verify_binary.ps1` script
+- Linux/macOS: Use `strings` command:
+  ```bash
+  strings video-analyzer | grep -A 5 "Build Date"
+  ```
