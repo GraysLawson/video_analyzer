@@ -33,42 +33,179 @@ download_project() {
     log "INFO" "Setting up project directory at $project_dir"
     echo -e "${CYAN}Setting up project directory...${NC}"
     
+    # First check if we're already in the project directory
+    if [[ -f "$(pwd)/setup.py" ]]; then
+        log "INFO" "Found setup.py in current directory, using it as project source"
+        echo -e "${YELLOW}Found setup.py in current directory, using it as project source.${NC}"
+        mkdir -p "$project_dir"
+        cp -r "$(pwd)/"* "$project_dir/"
+        return 0
+    fi
+    
     # Check if .git directory exists in installation directory
     if [[ -d "$project_dir/.git" ]]; then
         log "INFO" "Git repository already exists, updating it"
         echo -e "${YELLOW}Git repository already exists, updating...${NC}"
         (cd "$project_dir" && git pull) || {
-            log "ERROR" "Failed to update git repository"
-            echo -e "${RED}Failed to update git repository.${NC}"
-            return 1
+            log "WARNING" "Failed to update git repository, but continuing with existing files"
+            echo -e "${YELLOW}Warning: Failed to update git repository, but continuing with existing files.${NC}"
         }
     else
-        # Clone the repository
-        log "INFO" "Cloning repository to $project_dir"
-        echo -e "${CYAN}Cloning repository...${NC}"
-        git clone https://github.com/GraysLawson/video-analyzer.git "$project_dir" || {
-            log "ERROR" "Failed to clone repository"
-            echo -e "${RED}Failed to clone repository.${NC}"
+        # Try to download the release archive instead of git clone
+        log "INFO" "Downloading release archive"
+        echo -e "${CYAN}Downloading release archive...${NC}"
+        
+        mkdir -p "$project_dir"
+        
+        # Use curl or wget to download the release archive
+        if command -v curl > /dev/null; then
+            log "INFO" "Using curl to download release"
+            curl -s -L "https://github.com/GraysLawson/video_analyzer/archive/refs/heads/main.zip" -o "/tmp/video-analyzer.zip" || {
+                log "WARNING" "Failed to download with curl, trying alternative download method"
+                echo -e "${YELLOW}Warning: Failed to download with curl, trying alternative method.${NC}"
+                
+                # Try with wget as fallback
+                if command -v wget > /dev/null; then
+                    log "INFO" "Using wget to download release"
+                    wget -q "https://github.com/GraysLawson/video_analyzer/archive/refs/heads/main.zip" -O "/tmp/video-analyzer.zip" || {
+                        log "ERROR" "Failed to download with wget"
+                        echo -e "${RED}Failed to download release archive.${NC}"
+                    }
+                else
+                    log "ERROR" "Neither curl nor wget is available for downloading"
+                    echo -e "${RED}Failed to download: curl and wget not available.${NC}"
+                }
+            }
             
-            # Check if we're in the project directory already
-            if [[ -f "$(pwd)/setup.py" ]]; then
-                log "INFO" "Found setup.py in current directory, using it as project source"
-                echo -e "${YELLOW}Found setup.py in current directory, using it as project source.${NC}"
-                mkdir -p "$project_dir"
-                cp -r ./* "$project_dir/"
-                return 0
+            # Extract the zip file if it exists
+            if [[ -f "/tmp/video-analyzer.zip" ]]; then
+                log "INFO" "Extracting release archive"
+                unzip -q "/tmp/video-analyzer.zip" -d "/tmp" || {
+                    log "ERROR" "Failed to extract zip file"
+                    echo -e "${RED}Failed to extract zip file.${NC}"
+                    rm -f "/tmp/video-analyzer.zip"
+                    
+                    # Try git clone as last resort with anonymous access
+                    log "INFO" "Trying git clone with anonymous access as fallback"
+                    echo -e "${YELLOW}Trying git clone with anonymous access as fallback...${NC}"
+                    git clone "https://github.com/GraysLawson/video_analyzer.git" "$project_dir" --depth 1 || {
+                        log "ERROR" "Failed to clone repository"
+                        echo -e "${RED}Failed to download source code.${NC}"
+                        return 1
+                    }
+                }
+                
+                # Move files from the extracted directory to the project directory
+                if [[ -d "/tmp/video_analyzer-main" ]]; then
+                    log "INFO" "Moving files to project directory"
+                    cp -r /tmp/video_analyzer-main/* "$project_dir/"
+                    rm -rf "/tmp/video_analyzer-main"
+                fi
+                
+                # Clean up
+                rm -f "/tmp/video-analyzer.zip"
             fi
+        elif command -v wget > /dev/null; then
+            log "INFO" "Using wget to download release"
+            wget -q "https://github.com/GraysLawson/video_analyzer/archive/refs/heads/main.zip" -O "/tmp/video-analyzer.zip" || {
+                log "ERROR" "Failed to download with wget"
+                echo -e "${RED}Failed to download release archive.${NC}"
+                
+                # Try git clone as last resort with anonymous access
+                log "INFO" "Trying git clone with anonymous access as fallback"
+                echo -e "${YELLOW}Trying git clone with anonymous access as fallback...${NC}"
+                git clone "https://github.com/GraysLawson/video_analyzer.git" "$project_dir" --depth 1 || {
+                    log "ERROR" "Failed to clone repository"
+                    echo -e "${RED}Failed to download source code.${NC}"
+                    return 1
+                }
+            }
             
-            echo -e "${RED}Cannot proceed with installation.${NC}"
-            return 1
-        }
+            # Extract the zip file if it exists
+            if [[ -f "/tmp/video-analyzer.zip" ]]; then
+                log "INFO" "Extracting release archive"
+                unzip -q "/tmp/video-analyzer.zip" -d "/tmp" || {
+                    log "ERROR" "Failed to extract zip file"
+                    echo -e "${RED}Failed to extract zip file.${NC}"
+                    rm -f "/tmp/video-analyzer.zip"
+                    return 1
+                }
+                
+                # Move files from the extracted directory to the project directory
+                if [[ -d "/tmp/video_analyzer-main" ]]; then
+                    log "INFO" "Moving files to project directory"
+                    cp -r /tmp/video_analyzer-main/* "$project_dir/"
+                    rm -rf "/tmp/video_analyzer-main"
+                fi
+                
+                # Clean up
+                rm -f "/tmp/video-analyzer.zip"
+            fi
+        else
+            # If neither curl nor wget are available, try direct git clone with anonymous access
+            log "INFO" "No curl or wget available, trying git clone with anonymous access"
+            echo -e "${YELLOW}No curl or wget available, trying git clone with anonymous access...${NC}"
+            git clone "https://github.com/GraysLawson/video_analyzer.git" "$project_dir" --depth 1 || {
+                log "ERROR" "Failed to clone repository"
+                echo -e "${RED}Failed to download source code.${NC}"
+                return 1
+            }
+        fi
     fi
     
     # Check if we have a valid project
     if [[ ! -f "$project_dir/setup.py" ]]; then
         log "ERROR" "Invalid project directory, setup.py not found"
         echo -e "${RED}Invalid project directory, setup.py not found.${NC}"
-        return 1
+        
+        # Last resort - check if we can create a minimal setup.py
+        echo -e "${YELLOW}Attempting to create a minimal setup.py file...${NC}"
+        log "INFO" "Attempting to create a minimal setup.py file"
+        
+        mkdir -p "$project_dir"
+        cat > "$project_dir/setup.py" <<EOF
+from setuptools import setup, find_packages
+
+setup(
+    name="video_analyzer",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "opencv-python>=4.5.0",
+        "numpy>=1.19.0",
+        "ffmpeg-python>=0.2.0",
+    ],
+    entry_points={
+        'console_scripts': [
+            'video-analyzer=video_analyzer.__main__:main',
+        ],
+    },
+)
+EOF
+
+        mkdir -p "$project_dir/video_analyzer"
+        cat > "$project_dir/video_analyzer/__init__.py" <<EOF
+# Video Analyzer package
+EOF
+
+        cat > "$project_dir/video_analyzer/__main__.py" <<EOF
+#!/usr/bin/env python3
+import os
+import sys
+import logging
+
+def main():
+    print("Video Analyzer")
+    print("This is a minimal placeholder. The installation completed, but the actual code is missing.")
+    print("Please download the full source code from: https://github.com/GraysLawson/video_analyzer")
+    
+if __name__ == "__main__":
+    main()
+EOF
+
+        log "WARNING" "Created minimal placeholder code"
+        echo -e "${YELLOW}Created minimal placeholder code. Please download the full source code manually.${NC}"
+        return 0
     fi
     
     log "INFO" "Project setup completed successfully"
