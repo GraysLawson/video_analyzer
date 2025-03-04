@@ -164,6 +164,7 @@ setup(
         "opencv-python>=4.5.0",
         "numpy>=1.19.0",
         "ffmpeg-python>=0.2.0",
+        "rich>=10.0.0",
     ],
     entry_points={
         'console_scripts': [
@@ -373,8 +374,9 @@ install_application() {
     local install_dir="$1"
     local venv_dir="$2"
     local project_dir="$3"
+    local install_type="$4"  # "user" or "system"
     
-    log "INFO" "Installing Python application"
+    log "INFO" "Installing Python application (Type: $install_type)"
     echo -e "${CYAN}Installing Python application...${NC}"
     
     # Create launcher script
@@ -387,21 +389,73 @@ EOF
 
     chmod +x "$install_dir/video-analyzer"
     
-    # Create symlink in ~/bin if it exists and is in PATH
-    if [[ -d "$HOME/bin" ]]; then
-        if [[ ":$PATH:" == *":$HOME/bin:"* ]]; then
-            log "INFO" "Creating symlink in ~/bin"
-            ln -sf "$install_dir/video-analyzer" "$HOME/bin/video-analyzer" || {
-                log "WARNING" "Failed to create symlink in ~/bin"
-                echo -e "${YELLOW}Warning: Failed to create symlink in ~/bin.${NC}"
-            }
-            echo -e "${GREEN}Created symlink in ~/bin.${NC}"
+    if [[ "$install_type" == "system" ]]; then
+        # Create symlink in /usr/local/bin for system-wide installation
+        log "INFO" "Creating system-wide symlink in /usr/local/bin"
+        echo -e "${CYAN}Creating system-wide symlink...${NC}"
+        sudo ln -sf "$install_dir/video-analyzer" /usr/local/bin/video-analyzer || {
+            log "WARNING" "Failed to create symlink in /usr/local/bin"
+            echo -e "${YELLOW}Warning: Failed to create symlink in /usr/local/bin.${NC}"
+            echo -e "${YELLOW}You may need to run the script with sudo.${NC}"
+        }
+        echo -e "${GREEN}Created system-wide symlink in /usr/local/bin.${NC}"
+    else
+        # Create symlink in ~/bin if it exists and is in PATH for user installation
+        if [[ -d "$HOME/bin" ]]; then
+            if [[ ":$PATH:" == *":$HOME/bin:"* ]]; then
+                log "INFO" "Creating symlink in ~/bin"
+                ln -sf "$install_dir/video-analyzer" "$HOME/bin/video-analyzer" || {
+                    log "WARNING" "Failed to create symlink in ~/bin"
+                    echo -e "${YELLOW}Warning: Failed to create symlink in ~/bin.${NC}"
+                }
+                echo -e "${GREEN}Created symlink in ~/bin.${NC}"
+            fi
         fi
     fi
     
     log "INFO" "Python application installed successfully"
     echo -e "${GREEN}Python application installed successfully!${NC}"
     echo -e "${CYAN}You can run it with:${NC} $install_dir/video-analyzer"
+}
+
+# Uninstall Video Analyzer
+uninstall_application() {
+    local install_dir="$1"
+    
+    log "INFO" "Uninstalling Video Analyzer from $install_dir"
+    echo -e "${CYAN}Uninstalling Video Analyzer...${NC}"
+    
+    # Remove symlinks
+    if [[ -L "/usr/local/bin/video-analyzer" ]]; then
+        log "INFO" "Removing system-wide symlink"
+        sudo rm -f /usr/local/bin/video-analyzer || {
+            log "WARNING" "Failed to remove system-wide symlink"
+            echo -e "${YELLOW}Warning: Failed to remove system-wide symlink.${NC}"
+        }
+    fi
+    
+    if [[ -L "$HOME/bin/video-analyzer" ]]; then
+        log "INFO" "Removing user symlink"
+        rm -f "$HOME/bin/video-analyzer" || {
+            log "WARNING" "Failed to remove user symlink"
+            echo -e "${YELLOW}Warning: Failed to remove user symlink.${NC}"
+        }
+    fi
+    
+    # Remove installation directory
+    if [[ -d "$install_dir" ]]; then
+        log "INFO" "Removing installation directory"
+        rm -rf "$install_dir" || {
+            log "ERROR" "Failed to remove installation directory"
+            echo -e "${RED}Failed to remove installation directory.${NC}"
+            echo -e "${YELLOW}You may need to remove it manually:${NC} $install_dir"
+            return 1
+        }
+    fi
+    
+    log "INFO" "Uninstallation completed successfully"
+    echo -e "${GREEN}Video Analyzer has been uninstalled successfully.${NC}"
+    return 0
 }
 
 # Build standalone executable
@@ -503,30 +557,129 @@ main() {
         default_home="$HOME"
     fi
     
-    # Ask for installation directory
+    # Default installation directories
     local default_install_dir="$default_home/.local/video-analyzer"
-    read -p "Enter installation directory [$default_install_dir]: " install_dir
-    install_dir=${install_dir:-$default_install_dir}
-    log "INFO" "Selected installation directory: $install_dir"
+    local system_install_dir="/usr/local/share/video-analyzer"
+    
+    # Check for existing installations
+    local existing_installation=""
+    local existing_path=""
+    
+    if [[ -f "/usr/local/bin/video-analyzer" ]]; then
+        existing_installation="system"
+        existing_path=$(readlink -f "/usr/local/bin/video-analyzer" | sed 's|/video-analyzer$||')
+        log "INFO" "Found existing system-wide installation at $existing_path"
+    elif [[ -f "$HOME/bin/video-analyzer" ]]; then
+        existing_installation="user"
+        existing_path=$(readlink -f "$HOME/bin/video-analyzer" | sed 's|/video-analyzer$||')
+        log "INFO" "Found existing user installation at $existing_path"
+    elif [[ -d "$default_install_dir" ]]; then
+        existing_installation="user"
+        existing_path="$default_install_dir"
+        log "INFO" "Found existing user installation at $existing_path"
+    elif [[ -d "$system_install_dir" ]]; then
+        existing_installation="system"
+        existing_path="$system_install_dir"
+        log "INFO" "Found existing system-wide installation at $existing_path"
+    fi
+    
+    # Handle existing installation
+    if [[ -n "$existing_installation" ]]; then
+        echo -e "${YELLOW}Existing installation detected:${NC} $existing_path"
+        echo -e "${CYAN}What would you like to do?${NC}"
+        echo "1. Update existing installation"
+        echo "2. Uninstall existing installation"
+        echo "3. Install fresh copy in a different location"
+        echo "4. Cancel"
+        
+        read -p "Select an option [1-4]: " -n 1 -r
+        echo
+        log "INFO" "User selected option: $REPLY for existing installation"
+        
+        case $REPLY in
+            1)  # Update
+                log "INFO" "User chose to update existing installation"
+                echo -e "${CYAN}Updating existing installation...${NC}"
+                install_dir="$existing_path"
+                ;;
+            2)  # Uninstall
+                log "INFO" "User chose to uninstall existing installation"
+                if uninstall_application "$existing_path"; then
+                    echo -e "${CYAN}Would you like to install a fresh copy?${NC} (y/n)"
+                    read -p "" -n 1 -r
+                    echo
+                    
+                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                        log "INFO" "User chose not to reinstall after uninstall"
+                        echo -e "${GREEN}Uninstallation completed. Goodbye!${NC}"
+                        exit 0
+                    fi
+                    # Continue with fresh installation
+                    log "INFO" "Continuing with fresh installation after uninstall"
+                else
+                    log "ERROR" "Uninstallation failed. Exiting."
+                    echo -e "${RED}Uninstallation failed. Please check the logs.${NC}"
+                    exit 1
+                fi
+                ;;
+            3)  # Fresh install in different location
+                log "INFO" "User chose fresh installation in different location"
+                echo -e "${CYAN}Proceeding with fresh installation...${NC}"
+                # Continue with normal installation flow
+                ;;
+            *)  # Cancel or invalid
+                log "INFO" "User cancelled installation"
+                echo -e "${CYAN}Installation cancelled. Goodbye!${NC}"
+                exit 0
+                ;;
+        esac
+    fi
+    
+    # Ask for installation type if not updating
+    if [[ "$REPLY" != "1" ]]; then
+        echo -e "${CYAN}Installation Type:${NC}"
+        echo "1. User installation (recommended for regular users)"
+        echo "2. System-wide installation (requires admin/root privileges)"
+        
+        read -p "Select an installation type [1-2]: " -n 1 -r
+        echo
+        local install_type_selection=$REPLY
+        log "INFO" "Selected installation type: $install_type_selection"
+        
+        # Set installation directory based on type
+        if [[ $install_type_selection == "2" ]]; then
+            install_dir="$system_install_dir"
+            install_type="system"
+            log "INFO" "Using system-wide installation directory: $install_dir"
+            echo -e "${CYAN}Selected system-wide installation.${NC}"
+        else
+            # Ask for user installation directory
+            read -p "Enter installation directory [$default_install_dir]: " user_install_dir
+            install_dir=${user_install_dir:-$default_install_dir}
+            install_type="user"
+            log "INFO" "Using user installation directory: $install_dir"
+        fi
+    fi
     
     # Create installation directory
     mkdir -p "$install_dir"
     log "INFO" "Created installation directory: $install_dir"
     echo -e "${GREEN}Installation directory created: $install_dir${NC}"
     
-    # Project download directory (where the git repo will be cloned)
+    # Project download directory (where the source will be downloaded)
     local project_dir="$install_dir/source"
     
     # Virtual environment directory
     local venv_dir="$install_dir/venv"
     
-    # Ask for installation type
+    # Ask for installation package type
     echo -e "${CYAN}Installation Options:${NC}"
     echo "1. Python package (recommended)"
     echo "2. Standalone executable (experimental)"
     read -p "Select an option [1-2]: " -n 1 -r
     echo
     log "INFO" "Selected installation option: $REPLY"
+    local package_type=$REPLY
     
     # Install dependencies
     install_system_dependencies "$os"
@@ -541,12 +694,12 @@ main() {
     # Setup Python environment
     setup_python_environment "$venv_dir" "$project_dir"
     
-    if [[ $REPLY =~ ^[2]$ ]]; then
+    if [[ $package_type =~ ^[2]$ ]]; then
         # Standalone executable
         build_executable "$install_dir" "$venv_dir" "$project_dir"
     else
         # Python package (default)
-        install_application "$install_dir" "$venv_dir" "$project_dir"
+        install_application "$install_dir" "$venv_dir" "$project_dir" "$install_type"
     fi
     
     echo
