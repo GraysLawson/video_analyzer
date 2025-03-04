@@ -29,6 +29,27 @@ REQUIRED_PACKAGES=(
     "python3-tk"
 )
 
+# Add logging configuration
+LOG_FILE="/tmp/video-analyzer-install.log"
+VERBOSE=false
+
+# Function to log messages
+log() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+    
+    if [ "$VERBOSE" = true ]; then
+        case "$level" in
+            "ERROR") echo -e "${RED}[$level] $message${NC}" ;;
+            "WARNING") echo -e "${YELLOW}[$level] $message${NC}" ;;
+            "INFO") echo -e "${GREEN}[$level] $message${NC}" ;;
+            *) echo "[$level] $message" ;;
+        esac
+    fi
+}
+
 # Function to setup installation paths
 setup_paths() {
     local install_type=$1
@@ -85,12 +106,21 @@ restore_config() {
 
 # Function to uninstall
 uninstall() {
+    log "INFO" "Starting uninstallation process"
     echo -e "${YELLOW}Uninstalling video-analyzer...${NC}"
     
-    # Ask about keeping dependencies
-    read -p "Keep system dependencies? (y/n): " keep_deps
+    local keep_deps="n"
+    local keep_config="n"
+    
+    if [ "$INTERACTIVE" = true ]; then
+        read -p "Keep system dependencies? (y/n): " keep_deps
+        read -p "Keep configuration files? (y/n): " keep_config
+    else
+        log "INFO" "Non-interactive mode: removing everything"
+    fi
     
     if [[ $keep_deps != "y" ]]; then
+        log "INFO" "Removing system dependencies"
         echo -e "${YELLOW}Removing system dependencies...${NC}"
         if command_exists apt-get; then
             sudo apt-get remove -y "${REQUIRED_PACKAGES[@]}"
@@ -99,19 +129,23 @@ uninstall() {
         elif command_exists dnf; then
             sudo dnf remove -y "${REQUIRED_PACKAGES[@]}"
         fi
+    else
+        log "INFO" "Keeping system dependencies"
     fi
     
-    # Ask about keeping configuration
-    read -p "Keep configuration files? (y/n): " keep_config
-    
     if [[ $keep_config != "y" ]]; then
+        log "INFO" "Removing configuration files"
         rm -rf "$CONFIG_DIR" "$BACKUP_DIR"
+    else
+        log "INFO" "Keeping configuration files"
     fi
     
     # Remove virtual environment and binary
+    log "INFO" "Removing virtual environment and binary"
     rm -rf "$VENV_DIR"
     rm -f "$BIN_PATH"
     
+    log "INFO" "Uninstallation complete"
     echo -e "${GREEN}Uninstallation complete!${NC}"
 }
 
@@ -510,28 +544,40 @@ EOF
 
 # Main installation function
 main() {
+    # Initialize log file
+    echo "=== Video Analyzer Installation Log ===" > "$LOG_FILE"
+    echo "Started at: $(date)" >> "$LOG_FILE"
+    log "INFO" "Starting installation script"
+    
     local arch=$(detect_arch)
     local os=$(detect_os)
+    log "INFO" "Detected system: $os on $arch"
 
     # Check if script is running interactively
     if [ -t 0 ]; then
         INTERACTIVE=true
+        log "INFO" "Running in interactive mode"
     else
         INTERACTIVE=false
-        # If not interactive, download script and re-run with arguments
+        log "INFO" "Running in non-interactive mode"
+        # If not interactive and no arguments, show instructions
         if [ -z "$1" ]; then
+            log "INFO" "No arguments provided in non-interactive mode"
             echo -e "${YELLOW}Non-interactive shell detected. Please run one of the following commands:${NC}"
             echo "curl -sSLO https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh"
             echo "chmod +x install.sh"
             echo "./install.sh install     # For fresh installation"
             echo "./install.sh update      # To update existing installation"
             echo "./install.sh uninstall   # To uninstall"
+            log "INFO" "Exiting with instructions"
             exit 1
         fi
+        log "INFO" "Argument provided: $1"
     fi
 
     if check_installation; then
         current_version=$(get_current_version)
+        log "INFO" "Found existing installation version: $current_version"
         echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
         
         if [ "$INTERACTIVE" = true ]; then
@@ -540,6 +586,7 @@ main() {
             echo -e "2) Uninstall"
             echo -e "3) Exit"
             read -p "Enter your choice (1-3): " choice
+            log "INFO" "User selected option: $choice"
             
             case $choice in
                 1)
@@ -549,10 +596,12 @@ main() {
                     ACTION="uninstall"
                     ;;
                 3)
+                    log "INFO" "User chose to exit"
                     echo -e "${YELLOW}Exiting...${NC}"
                     exit 0
                     ;;
                 *)
+                    log "ERROR" "Invalid choice selected"
                     echo -e "${RED}Invalid choice. Exiting...${NC}"
                     exit 1
                     ;;
@@ -562,8 +611,10 @@ main() {
             case "$1" in
                 update|uninstall)
                     ACTION="$1"
+                    log "INFO" "Non-interactive mode: $ACTION selected"
                     ;;
                 *)
+                    log "ERROR" "Invalid argument in non-interactive mode: $1"
                     echo -e "${RED}Invalid argument. Use 'update' or 'uninstall'${NC}"
                     exit 1
                     ;;
@@ -572,12 +623,14 @@ main() {
 
         case "$ACTION" in
             update)
+                log "INFO" "Starting update process"
                 echo -e "${YELLOW}Updating video-analyzer...${NC}"
                 backup_config
                 uninstall
                 install_system_dependencies
                 install_minimal
                 restore_config
+                log "INFO" "Update completed successfully"
                 echo -e "${GREEN}Update complete!${NC}"
                 echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
                 ;;
@@ -586,6 +639,7 @@ main() {
                 ;;
         esac
     else
+        log "INFO" "No existing installation found"
         echo -e "${GREEN}Detected system: $os on $arch${NC}"
         
         if [ "$INTERACTIVE" = true ]; then
@@ -593,6 +647,7 @@ main() {
             echo -e "1) System-wide (requires sudo)"
             echo -e "2) User-local"
             read -p "Enter your choice (1-2): " install_type
+            log "INFO" "User selected installation type: $install_type"
             
             case $install_type in
                 1)
@@ -602,6 +657,7 @@ main() {
                     INSTALL_TYPE="user"
                     ;;
                 *)
+                    log "ERROR" "Invalid installation type selected"
                     echo -e "${RED}Invalid choice. Exiting...${NC}"
                     exit 1
                     ;;
@@ -612,24 +668,32 @@ main() {
             if [ "$1" = "install-system" ]; then
                 INSTALL_TYPE="system"
             fi
+            log "INFO" "Non-interactive mode: selected $INSTALL_TYPE installation"
         fi
         
         setup_paths "$INSTALL_TYPE"
+        log "INFO" "Set up paths for $INSTALL_TYPE installation"
         
         if [ "$INSTALL_TYPE" = "user" ]; then
             # Add user's bin to PATH if not already there
             if [[ ":$PATH:" != *":$USER_INSTALL_DIR/bin:"* ]]; then
+                log "INFO" "Adding user bin directory to PATH"
                 echo "export PATH=\"\$PATH:$USER_INSTALL_DIR/bin\"" >> ~/.bashrc
                 export PATH="$PATH:$USER_INSTALL_DIR/bin"
             fi
         fi
         
+        log "INFO" "Starting installation process"
         echo -e "${YELLOW}Installing video-analyzer...${NC}"
         install_system_dependencies
         install_minimal
+        log "INFO" "Installation completed successfully"
         echo -e "${GREEN}Installation complete!${NC}"
         echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
     fi
+    
+    log "INFO" "Installation script finished"
+    echo -e "${YELLOW}Installation log available at: $LOG_FILE${NC}"
 }
 
 # Run main installation with all arguments
