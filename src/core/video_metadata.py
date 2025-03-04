@@ -2,12 +2,14 @@ import os
 import subprocess
 import json
 from typing import Dict, Optional
+import logging
 
 class VideoMetadata:
     @staticmethod
     def get_video_metadata(file_path: str) -> Optional[Dict]:
         """Extract resolution, bitrate, and format info using ffprobe."""
         try:
+            print(f"Processing file: {file_path}")  # Debug output
             cmd = [
                 'ffprobe', 
                 '-v', 'quiet', 
@@ -17,7 +19,14 @@ class VideoMetadata:
                 file_path
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Add a timeout of 30 seconds
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                print(f"ffprobe failed with return code {result.returncode}")
+                if result.stderr:
+                    print(f"Error output: {result.stderr}")
+                return None
+                
             data = json.loads(result.stdout)
             
             # Find the video stream
