@@ -37,11 +37,11 @@ A powerful tool for finding and managing duplicate video files with different re
 
 #### Linux and macOS
 ```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/video_analyzer/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh | bash
 ```
 
 #### Windows
-Download the latest `video-analyzer.exe` from the [releases page](https://github.com/yourusername/video_analyzer/releases).
+Download the latest `video-analyzer.exe` from the [releases page](https://github.com/GraysLawson/video_analyzer/releases).
 
 ### Manual Installation
 
@@ -54,28 +54,28 @@ uname -m
 
 #### Linux x86_64
 ```bash
-curl -LO https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer-x86_64
+curl -LO https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-x86_64
 chmod +x video-analyzer-x86_64
 sudo mv video-analyzer-x86_64 /usr/local/bin/video-analyzer
 ```
 
 #### Linux ARM64
 ```bash
-curl -LO https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer-aarch64
+curl -LO https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-aarch64
 chmod +x video-analyzer-aarch64
 sudo mv video-analyzer-aarch64 /usr/local/bin/video-analyzer
 ```
 
 #### Linux ARM32
 ```bash
-curl -LO https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer-armv7l
+curl -LO https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-armv7l
 chmod +x video-analyzer-armv7l
 sudo mv video-analyzer-armv7l /usr/local/bin/video-analyzer
 ```
 
 #### macOS
 ```bash
-curl -LO https://github.com/yourusername/video_analyzer/releases/latest/download/video-analyzer-macos
+curl -LO https://github.com/GraysLawson/video_analyzer/releases/latest/download/video-analyzer-macos
 chmod +x video-analyzer-macos
 sudo mv video-analyzer-macos /usr/local/bin/video-analyzer
 ```
@@ -329,7 +329,7 @@ The Linux binary is built on Ubuntu 18.04 for maximum compatibility. Tested and 
 2. Run the verification script:
    ```powershell
    # Download the verification script
-   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/yourusername/video_analyzer/main/verify_binary.ps1" -OutFile "verify_binary.ps1"
+   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/verify_binary.ps1" -OutFile "verify_binary.ps1"
    
    # Run the script
    .\verify_binary.ps1
@@ -351,8 +351,8 @@ The Linux binary is built on Ubuntu 18.04 for maximum compatibility. Tested and 
 1. Download the binary and checksum file:
    ```bash
    # Linux
-   wget https://github.com/yourusername/video_analyzer/releases/download/v1.0.0/video-analyzer
-   wget https://github.com/yourusername/video_analyzer/releases/download/v1.0.0/video-analyzer.sha256
+   wget https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer
+   wget https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer.sha256
    
    # Verify checksum
    sha256sum -c video-analyzer.sha256
@@ -361,10 +361,10 @@ The Linux binary is built on Ubuntu 18.04 for maximum compatibility. Tested and 
    For Linux, you can also verify the GPG signature:
    ```bash
    # Download the signature
-   wget https://github.com/yourusername/video_analyzer/releases/download/v1.0.0/video-analyzer.sig
+   wget https://github.com/GraysLawson/video_analyzer/releases/download/v1.0.0/video-analyzer.sig
    
    # Import the public key (first time only)
-   curl -s https://raw.githubusercontent.com/yourusername/video_analyzer/main/public_key.asc | gpg --import
+   curl -s https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/public_key.asc | gpg --import
    
    # Verify signature
    gpg --verify video-analyzer.sig video-analyzer
@@ -399,14 +399,14 @@ If you prefer not to use the pre-built binaries, you have several alternatives:
 
 2. **Install from source:**
    ```bash
-   git clone https://github.com/yourusername/video_analyzer.git
+   git clone https://github.com/GraysLawson/video_analyzer.git
    cd video_analyzer
    pip install -e .
    ```
 
 3. **Build your own binary:**
    ```bash
-   git clone https://github.com/yourusername/video_analyzer.git
+   git clone https://github.com/GraysLawson/video_analyzer.git
    cd video_analyzer
    pip install -r requirements.txt
    python -m PyInstaller build_scripts/build.spec
