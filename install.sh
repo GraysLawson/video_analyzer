@@ -1,230 +1,224 @@
 #!/usr/bin/env bash
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+# ANSI color codes
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+RED="\033[0;31m"
+CYAN="\033[0;36m"
+NC="\033[0m" # No Color
 
-# Setup logging
-LOG_FILE="/tmp/video-analyzer-install-$(date +%Y%m%d-%H%M%S).log"
-VERBOSE=false
+# Configure logging
+LOG_FILE="/tmp/video-analyzer-install-$(date +%Y%m%d%H%M%S).log"
 
-# Log message function
+# Function to log messages
 log() {
     local level="$1"
     local message="$2"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # Log to file
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
     echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
-    
-    # If verbose, also print to stdout
-    if [[ "$VERBOSE" == true || "$level" == "ERROR" ]]; then
-        case "$level" in
-            "ERROR") echo -e "${RED}[$level] $message${NC}" ;;
-            "WARNING") echo -e "${YELLOW}[$level] $message${NC}" ;;
-            "INFO") echo -e "${GREEN}[$level] $message${NC}" ;;
-            *) echo "[$level] $message" ;;
-        esac
-    fi
 }
 
-# Initialize log file
+# Initialize logging
 init_logging() {
-    echo "=== Video Analyzer Installation Log ===" > "$LOG_FILE"
-    echo "Started at: $(date)" >> "$LOG_FILE"
-    log "INFO" "Logging initialized to $LOG_FILE"
-    log "INFO" "Working directory: $(pwd)"
+    mkdir -p "$(dirname "$LOG_FILE")"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo "[$timestamp] [INFO] Starting Video Analyzer installation" > "$LOG_FILE"
+    echo "[$timestamp] [INFO] Working directory: $(pwd)" >> "$LOG_FILE"
 }
 
-# ASCII Art Banner
-display_banner() {
-    echo -e "${BLUE}"
-    echo "##############################################"
-    echo "#                                            #"
-    echo "#            Video Analyzer                  #"
-    echo "#        Installation Assistant              #"
-    echo "#                                            #"
-    echo "##############################################"
-    echo -e "${NC}"
-}
-
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
+# Download project from GitHub
+download_project() {
+    local project_dir="$1"
+    
+    log "INFO" "Setting up project directory at $project_dir"
+    echo -e "${CYAN}Setting up project directory...${NC}"
+    
+    # Check if .git directory exists in installation directory
+    if [[ -d "$project_dir/.git" ]]; then
+        log "INFO" "Git repository already exists, updating it"
+        echo -e "${YELLOW}Git repository already exists, updating...${NC}"
+        (cd "$project_dir" && git pull) || {
+            log "ERROR" "Failed to update git repository"
+            echo -e "${RED}Failed to update git repository.${NC}"
+            return 1
+        }
+    else
+        # Clone the repository
+        log "INFO" "Cloning repository to $project_dir"
+        echo -e "${CYAN}Cloning repository...${NC}"
+        git clone https://github.com/username/video-analyzer.git "$project_dir" || {
+            log "ERROR" "Failed to clone repository"
+            echo -e "${RED}Failed to clone repository.${NC}"
+            
+            # Check if we're in the project directory already
+            if [[ -f "$(pwd)/setup.py" ]]; then
+                log "INFO" "Found setup.py in current directory, using it as project source"
+                echo -e "${YELLOW}Found setup.py in current directory, using it as project source.${NC}"
+                mkdir -p "$project_dir"
+                cp -r ./* "$project_dir/"
+                return 0
+            fi
+            
+            echo -e "${RED}Cannot proceed with installation.${NC}"
+            return 1
+        }
+    fi
+    
+    # Check if we have a valid project
+    if [[ ! -f "$project_dir/setup.py" ]]; then
+        log "ERROR" "Invalid project directory, setup.py not found"
+        echo -e "${RED}Invalid project directory, setup.py not found.${NC}"
+        return 1
+    fi
+    
+    log "INFO" "Project setup completed successfully"
+    echo -e "${GREEN}Project setup completed successfully.${NC}"
+    return 0
 }
 
 # Detect operating system
 detect_os() {
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    elif [[ -f /etc/debian_version ]]; then
-        echo "debian"
-    elif [[ -f /etc/redhat-release ]]; then
-        echo "redhat"
-    elif [[ -f /etc/arch-release ]]; then
-        echo "arch"
-    elif command_exists pacman; then
-        echo "arch"
-    elif command_exists apt-get; then
-        echo "debian"
-    elif command_exists dnf || command_exists yum; then
-        echo "redhat"
-    elif command_exists brew; then
-        echo "macos"
-    else
-        echo "unknown"
-    fi
+    local os_name=$(uname -s)
+    case "$os_name" in
+        Linux*)     
+            if grep -q -i "alpine" /etc/os-release 2>/dev/null; then
+                echo "alpine"
+            else
+                echo "linux"
+            fi
+            ;;
+        Darwin*)    echo "macos" ;;
+        *)          echo "unknown" ;;
+    esac
 }
 
 # Detect architecture
 detect_arch() {
-    local arch=$(uname -m)
-    case $arch in
-        x86_64)
-            echo "x64"
-            ;;
-        i386|i686)
-            echo "x86"
-            ;;
-        arm*|aarch*)
-            echo "arm"
-            ;;
-        *)
-            echo "unknown"
-            ;;
+    local arch_name=$(uname -m)
+    case "$arch_name" in
+        x86_64*)    echo "x86_64" ;;
+        arm64*)     echo "arm64" ;;
+        aarch64*)   echo "arm64" ;;
+        armv7l*)    echo "armv7" ;;
+        *)          echo "unknown" ;;
     esac
 }
 
-# Install system dependencies based on OS
+# Display installation banner
+display_banner() {
+    echo -e "${CYAN}"
+    echo '   __      ___     __               _                __                     '
+    echo '   \ \    / (_)   / _|             | |              / _|                    '
+    echo '    \ \  / / _  _| |_ ___  ___     / \   _ __   __ | |_ _  ___ __ ___ _ __ '
+    echo '     \ \/ / | |/ _  _/ _ \/ _ \   / _ \ | |_ \ / _ |  _| |/ _ / _` | |_ \ '
+    echo '      \  /  | | | ||  __/ (_) | / ___ \| | | | (_| | | | |  __/ (_| | | | |'
+    echo '       \/   |_|_| |_|\___|\___/ /_/   \_\_| |_|\__,_|_| |_|\___|\__,_|_| |_|'
+    echo -e "${NC}"
+}
+
+# Install system dependencies
 install_system_dependencies() {
-    echo -e "${YELLOW}Installing system dependencies...${NC}"
-    log "INFO" "Installing system dependencies for $1"
+    local os="$1"
     
-    local os=$1
-    case $os in
-        macos)
-            if ! command_exists brew; then
-                echo -e "${YELLOW}Installing Homebrew...${NC}"
-                log "INFO" "Installing Homebrew"
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            fi
-            brew update
-            if ! command_exists python3; then
-                log "INFO" "Installing Python via Homebrew"
-                brew install python
-            fi
-            ;;
-        debian)
-            log "INFO" "Updating apt repositories"
-            sudo apt-get update
-            log "INFO" "Installing Python and development packages"
-            sudo apt-get install -y python3 python3-pip python3-venv
-            ;;
-        redhat)
-            if command_exists dnf; then
-                log "INFO" "Installing Python packages via dnf"
-                sudo dnf install -y python3 python3-pip python3-devel
+    log "INFO" "Installing system dependencies for $os"
+    echo -e "${CYAN}Installing system dependencies...${NC}"
+    
+    case "$os" in
+        linux)
+            if command -v apt-get > /dev/null; then
+                log "INFO" "Using apt-get to install dependencies"
+                sudo apt-get update || {
+                    log "WARNING" "Failed to update apt repositories"
+                    echo -e "${YELLOW}Warning: Failed to update apt repositories.${NC}"
+                }
+                sudo apt-get install -y python3 python3-pip python3-venv ffmpeg || {
+                    log "ERROR" "Failed to install apt dependencies"
+                    echo -e "${RED}Failed to install dependencies with apt-get.${NC}"
+                    echo -e "${YELLOW}Please install manually: python3, python3-pip, python3-venv, ffmpeg${NC}"
+                }
+            elif command -v dnf > /dev/null; then
+                log "INFO" "Using dnf to install dependencies"
+                sudo dnf install -y python3 python3-pip ffmpeg || {
+                    log "ERROR" "Failed to install dnf dependencies"
+                    echo -e "${RED}Failed to install dependencies with dnf.${NC}"
+                    echo -e "${YELLOW}Please install manually: python3, python3-pip, ffmpeg${NC}"
+                }
+            elif command -v yum > /dev/null; then
+                log "INFO" "Using yum to install dependencies"
+                sudo yum install -y python3 python3-pip ffmpeg || {
+                    log "ERROR" "Failed to install yum dependencies"
+                    echo -e "${RED}Failed to install dependencies with yum.${NC}"
+                    echo -e "${YELLOW}Please install manually: python3, python3-pip, ffmpeg${NC}"
+                }
+            elif command -v pacman > /dev/null; then
+                log "INFO" "Using pacman to install dependencies"
+                sudo pacman -S --noconfirm python python-pip ffmpeg || {
+                    log "ERROR" "Failed to install pacman dependencies"
+                    echo -e "${RED}Failed to install dependencies with pacman.${NC}"
+                    echo -e "${YELLOW}Please install manually: python, python-pip, ffmpeg${NC}"
+                }
             else
-                log "INFO" "Installing Python packages via yum"
-                sudo yum install -y python3 python3-pip python3-devel
+                log "WARNING" "No supported package manager found"
+                echo -e "${YELLOW}No supported package manager found.${NC}"
+                echo -e "${YELLOW}Please ensure you have Python 3.7+, pip, and ffmpeg installed.${NC}"
             fi
             ;;
-        arch)
-            log "INFO" "Installing Python packages via pacman"
-            sudo pacman -Sy python python-pip
+        alpine)
+            log "INFO" "Using apk to install dependencies"
+            sudo apk add --no-cache python3 py3-pip ffmpeg || {
+                log "ERROR" "Failed to install apk dependencies"
+                echo -e "${RED}Failed to install dependencies with apk.${NC}"
+                echo -e "${YELLOW}Please install manually: python3, py3-pip, ffmpeg${NC}"
+            }
+            ;;
+        macos)
+            if command -v brew > /dev/null; then
+                log "INFO" "Using Homebrew to install dependencies"
+                brew install python3 ffmpeg || {
+                    log "ERROR" "Failed to install Homebrew dependencies"
+                    echo -e "${RED}Failed to install dependencies with Homebrew.${NC}"
+                    echo -e "${YELLOW}Please install manually: python3, ffmpeg${NC}"
+                }
+            else
+                log "WARNING" "Homebrew not found"
+                echo -e "${YELLOW}Homebrew not found.${NC}"
+                echo -e "${YELLOW}Please ensure you have Python 3.7+ and ffmpeg installed.${NC}"
+                echo -e "${YELLOW}We recommend installing Homebrew (https://brew.sh)${NC}"
+            fi
             ;;
         *)
-            log "ERROR" "Unsupported operating system. Please install Python 3.7+ manually."
-            echo -e "${RED}Unsupported operating system. Please install Python 3.7+ manually.${NC}"
-            exit 1
+            log "WARNING" "Unsupported OS, manual installation required"
+            echo -e "${YELLOW}Unsupported OS. Please install dependencies manually:${NC}"
+            echo -e "${YELLOW}1. Python 3.7 or higher${NC}"
+            echo -e "${YELLOW}2. pip (Python package manager)${NC}"
+            echo -e "${YELLOW}3. ffmpeg${NC}"
             ;;
     esac
     
-    echo -e "${GREEN}System dependencies installed successfully!${NC}"
-    log "INFO" "System dependencies installed successfully"
+    log "INFO" "System dependencies installation completed"
+    echo -e "${GREEN}System dependencies installation completed.${NC}"
 }
 
-# Download the project from GitHub
-download_project() {
-    local project_dir="$1"
-    log "INFO" "Downloading project to $project_dir"
-    
-    # Create project directory if it doesn't exist
-    if [[ ! -d "$project_dir" ]]; then
-        log "INFO" "Creating project directory $project_dir"
-        mkdir -p "$project_dir"
-    fi
-    
-    # Clone or update the repository
-    if [[ -d "$project_dir/.git" ]]; then
-        log "INFO" "Git repository already exists, pulling latest changes"
-        echo -e "${YELLOW}Updating existing repository...${NC}"
-        (cd "$project_dir" && git pull) || {
-            log "ERROR" "Failed to update repository"
-            echo -e "${RED}Failed to update repository.${NC}"
-            return 1
-        }
-    else
-        log "INFO" "Cloning repository from GitHub"
-        echo -e "${YELLOW}Downloading from GitHub...${NC}"
-        git clone https://github.com/GraysLawson/video_analyzer.git "$project_dir" || {
-            log "ERROR" "Failed to clone repository"
-            echo -e "${RED}Failed to clone repository.${NC}"
-            return 1
-        }
-    fi
-    
-    # Check if the project files exist
-    if [[ ! -f "$project_dir/setup.py" ]]; then
-        log "ERROR" "Project files not found in $project_dir"
-        echo -e "${RED}Project files not found. Installation failed.${NC}"
-        return 1
-    fi
-    
-    log "INFO" "Project download/update completed successfully"
-    return 0
-}
-
-# Create virtual environment and install Python dependencies
+# Setup Python virtual environment
 setup_python_environment() {
-    echo -e "${YELLOW}Setting up Python environment...${NC}"
-    log "INFO" "Setting up Python environment"
-    
     local venv_dir="$1"
     local project_dir="$2"
     
-    # Check if Python 3.7+ is installed
-    if ! command_exists python3; then
-        log "ERROR" "Python 3 is not installed"
-        echo -e "${RED}Python 3 is not installed. Please install Python 3.7 or higher.${NC}"
-        exit 1
-    fi
-    
-    # Check Python version
-    local python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-    local major_version=$(echo $python_version | cut -d. -f1)
-    local minor_version=$(echo $python_version | cut -d. -f2)
-    
-    log "INFO" "Detected Python version: $python_version"
-    
-    if [[ $major_version -lt 3 || ($major_version -eq 3 && $minor_version -lt 7) ]]; then
-        log "ERROR" "Python 3.7 or higher is required. Found version $python_version"
-        echo -e "${RED}Python 3.7 or higher is required. You have Python $python_version.${NC}"
-        exit 1
-    fi
+    log "INFO" "Setting up Python virtual environment at $venv_dir"
+    echo -e "${CYAN}Setting up Python virtual environment...${NC}"
     
     # Create virtual environment
-    log "INFO" "Creating virtual environment in $venv_dir"
-    echo -e "${YELLOW}Creating virtual environment in $venv_dir...${NC}"
-    python3 -m venv "$venv_dir" || {
-        log "ERROR" "Failed to create virtual environment"
-        echo -e "${RED}Failed to create virtual environment.${NC}"
-        exit 1
-    }
+    if [[ ! -d "$venv_dir" ]]; then
+        log "INFO" "Creating new virtual environment"
+        python3 -m venv "$venv_dir" || {
+            log "ERROR" "Failed to create virtual environment"
+            echo -e "${RED}Failed to create virtual environment.${NC}"
+            exit 1
+        }
+    else
+        log "INFO" "Virtual environment already exists at $venv_dir"
+        echo -e "${YELLOW}Virtual environment already exists.${NC}"
+    fi
     
     # Activate virtual environment
     log "INFO" "Activating virtual environment"
@@ -234,67 +228,59 @@ setup_python_environment() {
         exit 1
     }
     
-    # Upgrade pip
-    log "INFO" "Upgrading pip"
+    # Update pip
+    log "INFO" "Updating pip in virtual environment"
     pip install --upgrade pip || {
-        log "WARNING" "Failed to upgrade pip, continuing with existing version"
+        log "WARNING" "Failed to upgrade pip"
+        echo -e "${YELLOW}Warning: Failed to upgrade pip.${NC}"
     }
     
     # Install dependencies
     log "INFO" "Installing Python dependencies from $project_dir"
-    echo -e "${YELLOW}Installing Python dependencies...${NC}"
-    
-    # Change to the project directory and install
     (cd "$project_dir" && pip install -e .) || {
         log "ERROR" "Failed to install Python dependencies"
         echo -e "${RED}Failed to install Python dependencies.${NC}"
         exit 1
     }
     
-    log "INFO" "Python environment set up successfully"
-    echo -e "${GREEN}Python environment set up successfully!${NC}"
+    log "INFO" "Python virtual environment setup completed"
+    echo -e "${GREEN}Python virtual environment setup completed.${NC}"
 }
 
-# Install the application
+# Install as a Python application
 install_application() {
     local install_dir="$1"
     local venv_dir="$2"
     local project_dir="$3"
     
-    log "INFO" "Installing Video Analyzer to $install_dir"
-    echo -e "${YELLOW}Installing Video Analyzer...${NC}"
+    log "INFO" "Installing Python application"
+    echo -e "${CYAN}Installing Python application...${NC}"
     
     # Create launcher script
-    local launcher="$install_dir/video-analyzer"
+    cat > "$install_dir/video-analyzer" <<EOF
+#!/usr/bin/env bash
+source "$venv_dir/bin/activate"
+python -m video_analyzer "\$@"
+deactivate
+EOF
+
+    chmod +x "$install_dir/video-analyzer"
     
-    log "INFO" "Creating launcher script at $launcher"
-    echo "#!/bin/bash" > "$launcher"
-    echo "source \"$venv_dir/bin/activate\"" >> "$launcher"
-    echo "python -m video_analyzer \"\$@\"" >> "$launcher"
-    echo "deactivate" >> "$launcher"
-    
-    chmod +x "$launcher"
-    
-    log "INFO" "Installation completed successfully"
-    echo -e "${GREEN}Installation complete!${NC}"
-    echo -e "${CYAN}You can now run Video Analyzer by typing:${NC}"
-    echo -e "${CYAN}$launcher${NC}"
-    
-    # Ask if user wants to create a symbolic link
-    read -p "Do you want to create a symbolic link in /usr/local/bin? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [[ -w /usr/local/bin ]]; then
-            log "INFO" "Creating symbolic link in /usr/local/bin"
-            ln -sf "$launcher" /usr/local/bin/video-analyzer
-            echo -e "${GREEN}Symbolic link created. You can now run 'video-analyzer' from anywhere.${NC}"
-        else
-            log "INFO" "Creating symbolic link with sudo"
-            echo -e "${YELLOW}Creating symbolic link with sudo...${NC}"
-            sudo ln -sf "$launcher" /usr/local/bin/video-analyzer
-            echo -e "${GREEN}Symbolic link created. You can now run 'video-analyzer' from anywhere.${NC}"
+    # Create symlink in ~/bin if it exists and is in PATH
+    if [[ -d "$HOME/bin" ]]; then
+        if [[ ":$PATH:" == *":$HOME/bin:"* ]]; then
+            log "INFO" "Creating symlink in ~/bin"
+            ln -sf "$install_dir/video-analyzer" "$HOME/bin/video-analyzer" || {
+                log "WARNING" "Failed to create symlink in ~/bin"
+                echo -e "${YELLOW}Warning: Failed to create symlink in ~/bin.${NC}"
+            }
+            echo -e "${GREEN}Created symlink in ~/bin.${NC}"
         fi
     fi
+    
+    log "INFO" "Python application installed successfully"
+    echo -e "${GREEN}Python application installed successfully!${NC}"
+    echo -e "${CYAN}You can run it with:${NC} $install_dir/video-analyzer"
 }
 
 # Build standalone executable
@@ -322,7 +308,17 @@ build_executable() {
     }
     
     # Run build script
-    python build.py
+    log "INFO" "Running build script"
+    (cd "$project_dir" && python build.py) || {
+        log "ERROR" "Failed to build executable"
+        echo -e "${RED}Failed to build standalone executable.${NC}"
+        echo -e "${YELLOW}Falling back to Python script version.${NC}"
+        
+        # Fallback: create launcher script
+        log "INFO" "Falling back to Python script version"
+        install_application "$install_dir" "$venv_dir" "$project_dir"
+        return 1
+    }
     
     # Copy executable to install directory
     os=$(detect_os)
@@ -330,27 +326,39 @@ build_executable() {
     
     local executable=""
     if [[ "$os" == "macos" ]]; then
-        executable="dist/video-analyzer-macos"
+        executable="$project_dir/dist/video-analyzer-macos"
     else
-        executable="dist/video-analyzer"
+        executable="$project_dir/dist/video-analyzer"
     fi
     
     if [[ -f "$executable" ]]; then
+        log "INFO" "Copying executable to $install_dir"
         cp "$executable" "$install_dir/"
         chmod +x "$install_dir/video-analyzer"
+        log "INFO" "Standalone executable built successfully"
         echo -e "${GREEN}Standalone executable built successfully!${NC}"
         echo -e "${CYAN}You can find it at:${NC} $install_dir/video-analyzer"
     else
+        log "ERROR" "Executable not found at $executable"
         echo -e "${RED}Failed to build standalone executable.${NC}"
         echo -e "${YELLOW}Falling back to Python script version.${NC}"
+        
+        # Fallback: create launcher script
+        log "INFO" "Falling back to Python script version"
+        install_application "$install_dir" "$venv_dir" "$project_dir"
     fi
     
     # Deactivate virtual environment
+    log "INFO" "Deactivating virtual environment"
     deactivate
 }
 
 # Main installation function
 main() {
+    # Initialize logging
+    init_logging
+    
+    # Display banner
     display_banner
     
     echo -e "${CYAN}Welcome to the Video Analyzer Installation Assistant!${NC}"
@@ -360,18 +368,33 @@ main() {
     # Detect OS and architecture
     local os=$(detect_os)
     local arch=$(detect_arch)
+    log "INFO" "Detected OS: $os, Architecture: $arch"
     echo -e "${CYAN}Detected operating system:${NC} $os"
     echo -e "${CYAN}Detected architecture:${NC} $arch"
     echo
     
+    # Check if we're running as root and set proper default home directory
+    local default_home
+    if [[ $EUID -eq 0 && "$HOME" == "/" ]]; then
+        log "WARNING" "Running as root with HOME=/. Using /opt instead."
+        default_home="/opt"
+    else
+        default_home="$HOME"
+    fi
+    
     # Ask for installation directory
-    local default_install_dir="$HOME/.local/video-analyzer"
+    local default_install_dir="$default_home/.local/video-analyzer"
     read -p "Enter installation directory [$default_install_dir]: " install_dir
     install_dir=${install_dir:-$default_install_dir}
+    log "INFO" "Selected installation directory: $install_dir"
     
     # Create installation directory
     mkdir -p "$install_dir"
+    log "INFO" "Created installation directory: $install_dir"
     echo -e "${GREEN}Installation directory created: $install_dir${NC}"
+    
+    # Project download directory (where the git repo will be cloned)
+    local project_dir="$install_dir/source"
     
     # Virtual environment directory
     local venv_dir="$install_dir/venv"
@@ -382,23 +405,34 @@ main() {
     echo "2. Standalone executable (experimental)"
     read -p "Select an option [1-2]: " -n 1 -r
     echo
+    log "INFO" "Selected installation option: $REPLY"
     
     # Install dependencies
     install_system_dependencies "$os"
     
+    # Download project from GitHub
+    if ! download_project "$project_dir"; then
+        log "ERROR" "Failed to download project. Installation aborted."
+        echo -e "${RED}Installation failed. See log for details: $LOG_FILE${NC}"
+        exit 1
+    fi
+    
+    # Setup Python environment
+    setup_python_environment "$venv_dir" "$project_dir"
+    
     if [[ $REPLY =~ ^[2]$ ]]; then
         # Standalone executable
-        setup_python_environment "$venv_dir"
-        build_executable "$install_dir" "$venv_dir"
+        build_executable "$install_dir" "$venv_dir" "$project_dir"
     else
         # Python package (default)
-        setup_python_environment "$venv_dir"
-        install_application "$install_dir" "$venv_dir"
+        install_application "$install_dir" "$venv_dir" "$project_dir"
     fi
     
     echo
+    log "INFO" "Installation completed successfully"
     echo -e "${GREEN}Installation completed successfully!${NC}"
     echo -e "${CYAN}Thank you for installing Video Analyzer!${NC}"
+    echo -e "${CYAN}Installation log available at: $LOG_FILE${NC}"
 }
 
 # Execute main function
