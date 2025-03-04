@@ -9,27 +9,51 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }} Binary
+    name: Build ${{ matrix.os }}-${{ matrix.arch }} Binary
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
     strategy:
       matrix:
-        os: [ubuntu-18.04, windows-latest, macos-latest]
         include:
-          - os: ubuntu-18.04
-            asset_name: video-analyzer
+          # x86_64 builds
+          - os: ubuntu-20.04
+            arch: x86_64
+            asset_name: video-analyzer-x86_64
             asset_content_type: application/x-executable
+            qemu_arch: x86_64
+          # ARM64 builds
+          - os: ubuntu-20.04
+            arch: aarch64
+            asset_name: video-analyzer-aarch64
+            asset_content_type: application/x-executable
+            qemu_arch: aarch64
+          # ARM32 builds
+          - os: ubuntu-20.04
+            arch: armv7l
+            asset_name: video-analyzer-armv7l
+            asset_content_type: application/x-executable
+            qemu_arch: arm
+          # Windows build
           - os: windows-latest
+            arch: x86_64
             asset_name: video-analyzer.exe
             asset_content_type: application/x-msdownload
+          # macOS build
           - os: macos-latest
+            arch: x86_64
             asset_name: video-analyzer-macos
             asset_content_type: application/x-executable
 
     steps:
       - uses: actions/checkout@v4
       
+      - name: Set up QEMU
+        if: matrix.os == 'ubuntu-20.04' && matrix.arch != 'x86_64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/${{ matrix.qemu_arch }}
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -108,10 +132,14 @@ jobs:
           </assembly>' > video_analyzer.manifest
 
       - name: Setup Linux build environment
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-20.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y patchelf
+          sudo apt-get install -y patchelf gcc-multilib
+          if [ "${{ matrix.arch }}" != "x86_64" ]; then
+            # Install cross-compilation tools for ARM
+            sudo apt-get install -y crossbuild-essential-arm64 crossbuild-essential-armhf
+          fi
 
       - name: Build binary
         run: |
@@ -130,14 +158,43 @@ jobs:
               --hiddenimport=packaging.requirements \
               --key=VideoAnalyzer \
               video_analyzer/__main__.py
-          elif [ "${{ matrix.os }}" = "ubuntu-18.04" ]; then
+          elif [ "${{ matrix.os }}" = "ubuntu-20.04" ]; then
+            # Set environment variables for maximum compatibility
+            export PYTHONNOUSERSITE=1
+            export PYTHONPATH=/usr/lib/python3.8
+            export GLIBC_TUNABLES=glibc.pthread.rseq=0
+            
+            # Set architecture-specific flags
+            if [ "${{ matrix.arch }}" = "aarch64" ]; then
+              export ARCH_FLAGS="--target-arch aarch64"
+            elif [ "${{ matrix.arch }}" = "armv7l" ]; then
+              export ARCH_FLAGS="--target-arch arm"
+            else
+              export ARCH_FLAGS="--target-arch x86_64"
+            fi
+            
+            # Build with specific flags for broader compatibility
             python -m PyInstaller --clean --onefile \
               --name=${{ matrix.asset_name }} \
               --add-data="README.md:." \
               --add-data="build_info.txt:." \
               --runtime-tmpdir /tmp \
+              $ARCH_FLAGS \
+              --strip \
+              --linux-bootloader-ignore-signals \
+              --exclude-module _bootlocale \
+              --exclude-module grp \
+              --exclude-module pwd \
+              --exclude-module termios \
               video_analyzer/__main__.py
+
+            # Patch the binary for better compatibility
             patchelf --set-rpath '$ORIGIN/lib' dist/${{ matrix.asset_name }}
+            if [ -f "dist/${{ matrix.asset_name }}" ]; then
+              # Set older GLIBC version requirements
+              patchelf --replace-needed libpython3.8.so.1.0 libpython3.8.so dist/${{ matrix.asset_name }}
+              patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 dist/${{ matrix.asset_name }} || true
+            fi
           else
             python -m PyInstaller --clean --onefile \
               --name=${{ matrix.asset_name }} \
@@ -158,7 +215,7 @@ jobs:
         shell: bash
 
       - name: Sign Linux Binary
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-20.04'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -187,7 +244,7 @@ jobs:
           asset_content_type: text/plain
 
       - name: Upload Linux Signature
-        if: matrix.os == 'ubuntu-18.04'
+        if: matrix.os == 'ubuntu-20.04'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
