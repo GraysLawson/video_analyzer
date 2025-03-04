@@ -55,7 +55,12 @@ log() {
 
 # Function to check if script is running in a terminal
 is_terminal() {
-    [ -t 0 ] && [ -t 1 ]
+    # More robust check for interactive terminal
+    if [ -t 0 ] && [ -t 1 ] && [ -z "$INSTALL_SCRIPT_REEXEC" ]; then
+        return 0  # Is a terminal
+    else
+        return 1  # Not a terminal
+    fi
 }
 
 # Function to setup installation paths
@@ -561,8 +566,18 @@ main() {
     local os=$(detect_os)
     log "INFO" "Detected system: $os on $arch"
 
+    # Determine if we're in interactive mode - do this first, before the re-exec check
+    if is_terminal; then
+        INTERACTIVE=true
+        log "INFO" "Running in interactive mode"
+    else
+        INTERACTIVE=false
+        log "INFO" "Running in non-interactive mode"
+    fi
+
     # Check if running from pipe and if we need to re-execute
-    if [ ! -t 0 ] && [ -z "$INSTALL_SCRIPT_REEXEC" ]; then
+    # Only do this if we really want interactive mode
+    if [ "$INTERACTIVE" = true ] && [ ! -t 0 ] && [ -z "$INSTALL_SCRIPT_REEXEC" ]; then
         log "INFO" "Running from pipe, downloading script for proper interaction"
         TMP_SCRIPT=$(mktemp)
         log "INFO" "Created temporary script at: $TMP_SCRIPT"
@@ -583,15 +598,6 @@ main() {
             exec script -qec "bash \"$TMP_SCRIPT\"" /dev/null
         fi
         exit 0
-    fi
-
-    # Determine if we're in interactive mode
-    if is_terminal; then
-        INTERACTIVE=true
-        log "INFO" "Running in interactive mode"
-    else
-        INTERACTIVE=false
-        log "INFO" "Running in non-interactive mode"
     fi
 
     # Handle command line arguments first
