@@ -513,17 +513,65 @@ main() {
     local arch=$(detect_arch)
     local os=$(detect_os)
 
+    # Check if script is running interactively
+    if [ -t 0 ]; then
+        INTERACTIVE=true
+    else
+        INTERACTIVE=false
+        # If not interactive, download script and re-run with arguments
+        if [ -z "$1" ]; then
+            echo -e "${YELLOW}Non-interactive shell detected. Please run one of the following commands:${NC}"
+            echo "curl -sSLO https://raw.githubusercontent.com/GraysLawson/video_analyzer/main/install.sh"
+            echo "chmod +x install.sh"
+            echo "./install.sh install     # For fresh installation"
+            echo "./install.sh update      # To update existing installation"
+            echo "./install.sh uninstall   # To uninstall"
+            exit 1
+        fi
+    fi
+
     if check_installation; then
         current_version=$(get_current_version)
         echo -e "${YELLOW}Video Analyzer version ${current_version} is already installed.${NC}"
-        echo -e "Choose an option:"
-        echo -e "1) Update"
-        echo -e "2) Uninstall"
-        echo -e "3) Exit"
-        read -p "Enter your choice (1-3): " choice
         
-        case $choice in
-            1)
+        if [ "$INTERACTIVE" = true ]; then
+            echo -e "Choose an option:"
+            echo -e "1) Update"
+            echo -e "2) Uninstall"
+            echo -e "3) Exit"
+            read -p "Enter your choice (1-3): " choice
+            
+            case $choice in
+                1)
+                    ACTION="update"
+                    ;;
+                2)
+                    ACTION="uninstall"
+                    ;;
+                3)
+                    echo -e "${YELLOW}Exiting...${NC}"
+                    exit 0
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice. Exiting...${NC}"
+                    exit 1
+                    ;;
+            esac
+        else
+            # Non-interactive mode, use command line argument
+            case "$1" in
+                update|uninstall)
+                    ACTION="$1"
+                    ;;
+                *)
+                    echo -e "${RED}Invalid argument. Use 'update' or 'uninstall'${NC}"
+                    exit 1
+                    ;;
+            esac
+        fi
+
+        case "$ACTION" in
+            update)
                 echo -e "${YELLOW}Updating video-analyzer...${NC}"
                 backup_config
                 uninstall
@@ -533,42 +581,48 @@ main() {
                 echo -e "${GREEN}Update complete!${NC}"
                 echo -e "${YELLOW}Run 'video-analyzer' to start the program${NC}"
                 ;;
-            2)
+            uninstall)
                 uninstall
-                ;;
-            3)
-                echo -e "${YELLOW}Exiting...${NC}"
-                exit 0
-                ;;
-            *)
-                echo -e "${RED}Invalid choice. Exiting...${NC}"
-                exit 1
                 ;;
         esac
     else
         echo -e "${GREEN}Detected system: $os on $arch${NC}"
-        echo -e "Choose installation type:"
-        echo -e "1) System-wide (requires sudo)"
-        echo -e "2) User-local"
-        read -p "Enter your choice (1-2): " install_type
         
-        case $install_type in
-            1)
-                setup_paths "system"
-                ;;
-            2)
-                setup_paths "user"
-                # Add user's bin to PATH if not already there
-                if [[ ":$PATH:" != *":$USER_INSTALL_DIR/bin:"* ]]; then
-                    echo "export PATH=\"\$PATH:$USER_INSTALL_DIR/bin\"" >> ~/.bashrc
-                    export PATH="$PATH:$USER_INSTALL_DIR/bin"
-                fi
-                ;;
-            *)
-                echo -e "${RED}Invalid choice. Exiting...${NC}"
-                exit 1
-                ;;
-        esac
+        if [ "$INTERACTIVE" = true ]; then
+            echo -e "Choose installation type:"
+            echo -e "1) System-wide (requires sudo)"
+            echo -e "2) User-local"
+            read -p "Enter your choice (1-2): " install_type
+            
+            case $install_type in
+                1)
+                    INSTALL_TYPE="system"
+                    ;;
+                2)
+                    INSTALL_TYPE="user"
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice. Exiting...${NC}"
+                    exit 1
+                    ;;
+            esac
+        else
+            # Default to user-local installation in non-interactive mode
+            INSTALL_TYPE="user"
+            if [ "$1" = "install-system" ]; then
+                INSTALL_TYPE="system"
+            fi
+        fi
+        
+        setup_paths "$INSTALL_TYPE"
+        
+        if [ "$INSTALL_TYPE" = "user" ]; then
+            # Add user's bin to PATH if not already there
+            if [[ ":$PATH:" != *":$USER_INSTALL_DIR/bin:"* ]]; then
+                echo "export PATH=\"\$PATH:$USER_INSTALL_DIR/bin\"" >> ~/.bashrc
+                export PATH="$PATH:$USER_INSTALL_DIR/bin"
+            fi
+        fi
         
         echo -e "${YELLOW}Installing video-analyzer...${NC}"
         install_system_dependencies
@@ -578,5 +632,5 @@ main() {
     fi
 }
 
-# Run main installation
-main
+# Run main installation with all arguments
+main "$@"
