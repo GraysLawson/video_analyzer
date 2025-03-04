@@ -28,183 +28,174 @@ jobs:
             asset_content_type: application/x-executable
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'  # Using older Python version for better compatibility
-        cache: 'pip'
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+          cache: 'pip'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .[dev]
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
 
-    # Create version file for Windows with detailed metadata
-    - name: Create Version Info
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo "VSVersionInfo(
-          ffi=FixedFileInfo(
-            filevers=(1, 0, 0, 0),
-            prodvers=(1, 0, 0, 0),
-            mask=0x3f,
-            flags=0x0,
-            OS=0x40004,
-            fileType=0x1,
-            subtype=0x0,
-            date=(0, 0)
-          ),
-          kids=[
-            StringFileInfo([
-              StringTable(
-                u'040904B0',
-                [StringStruct(u'CompanyName', u'Open Source Video Tools'),
-                 StringStruct(u'FileDescription', u'Video Analyzer - Open Source Video Management Tool'),
-                 StringStruct(u'FileVersion', u'1.0.0'),
-                 StringStruct(u'InternalName', u'video_analyzer'),
-                 StringStruct(u'LegalCopyright', u'MIT License - https://opensource.org/licenses/MIT'),
-                 StringStruct(u'OriginalFilename', u'video-analyzer.exe'),
-                 StringStruct(u'ProductName', u'Video Analyzer'),
-                 StringStruct(u'ProductVersion', u'1.0.0'),
-                 StringStruct(u'Comments', u'https://github.com/yourusername/video_analyzer')])
-            ]),
-            VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
-          ]
-        )" > version_info.txt
+      - name: Create Version Info
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "VSVersionInfo(
+            ffi=FixedFileInfo(
+              filevers=(1, 0, 0, 0),
+              prodvers=(1, 0, 0, 0),
+              mask=0x3f,
+              flags=0x0,
+              OS=0x40004,
+              fileType=0x1,
+              subtype=0x0,
+              date=(0, 0)
+            ),
+            kids=[
+              StringFileInfo([
+                StringTable(
+                  u'040904B0',
+                  [StringStruct(u'CompanyName', u'Open Source Video Tools'),
+                   StringStruct(u'FileDescription', u'Video Analyzer - Open Source Video Management Tool'),
+                   StringStruct(u'FileVersion', u'1.0.0'),
+                   StringStruct(u'InternalName', u'video_analyzer'),
+                   StringStruct(u'LegalCopyright', u'MIT License - https://opensource.org/licenses/MIT'),
+                   StringStruct(u'OriginalFilename', u'video-analyzer.exe'),
+                   StringStruct(u'ProductName', u'Video Analyzer'),
+                   StringStruct(u'ProductVersion', u'1.0.0'),
+                   StringStruct(u'Comments', u'https://github.com/yourusername/video_analyzer')])
+              ]),
+              VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+            ]
+          )" > version_info.txt
 
-    # Generate build info
-    - name: Create build info
-      shell: bash
-      run: |
-        echo "Build Date: $(date -u)" > build_info.txt
-        echo "Commit: ${{ github.sha }}" >> build_info.txt
-        echo "Source: https://github.com/${{ github.repository }}" >> build_info.txt
-        echo "License: MIT" >> build_info.txt
-        echo "This is an open source tool for video management." >> build_info.txt
+      - name: Create build info
+        shell: bash
+        run: |
+          echo "Build Date: $(date -u)" > build_info.txt
+          echo "Commit: ${{ github.sha }}" >> build_info.txt
+          echo "Source: https://github.com/${{ github.repository }}" >> build_info.txt
+          echo "License: MIT" >> build_info.txt
+          echo "This is an open source tool for video management." >> build_info.txt
 
-    # Create manifest for Windows
-    - name: Create Windows Manifest
-      if: matrix.os == 'windows-latest'
-      run: |
-        echo '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-          <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="VideoAnalyzer" type="win32"/>
-          <description>Video Analyzer Tool</description>
-          <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
-            <security>
-              <requestedPrivileges>
-                <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
-              </requestedPrivileges>
-            </security>
-          </trustInfo>
-          <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
-            <application>
-              <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/>
-              <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
-              <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
-              <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
-              <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
-            </application>
-          </compatibility>
-        </assembly>' > video_analyzer.manifest
+      - name: Create Windows Manifest
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+            <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="VideoAnalyzer" type="win32"/>
+            <description>Video Analyzer Tool</description>
+            <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+              <security>
+                <requestedPrivileges>
+                  <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+                </requestedPrivileges>
+              </security>
+            </trustInfo>
+            <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+              <application>
+                <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/>
+                <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+                <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+                <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+                <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+              </application>
+            </compatibility>
+          </assembly>' > video_analyzer.manifest
 
-    # Install older glibc for Linux build
-    - name: Setup Linux build environment
-      if: matrix.os == 'ubuntu-18.04'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y patchelf
+      - name: Setup Linux build environment
+        if: matrix.os == 'ubuntu-18.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
 
-    - name: Build binary
-      run: |
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          # Windows build with optimizations for AV compatibility
-          python -m PyInstaller --clean --onefile \
-            --name=${{ matrix.asset_name }} \
-            --add-data="README.md:." \
-            --add-data="build_info.txt:." \
-            --version-file=version_info.txt \
-            --manifest=video_analyzer.manifest \
-            --add-binary="LICENSE;." \
-            --hiddenimport=pkg_resources \
-            --hiddenimport=packaging \
-            --hiddenimport=packaging.version \
-            --hiddenimport=packaging.specifiers \
-            --hiddenimport=packaging.requirements \
-            --key=VideoAnalyzer \
-            video_analyzer/__main__.py
-        elif [ "${{ matrix.os }}" = "ubuntu-18.04" ]; then
-          # Linux build with compatibility flags
-          python -m PyInstaller --clean --onefile \
-            --name=${{ matrix.asset_name }} \
-            --add-data="README.md:." \
-            --add-data="build_info.txt:." \
-            --runtime-tmpdir /tmp \
-            video_analyzer/__main__.py
-          patchelf --set-rpath '$ORIGIN/lib' dist/${{ matrix.asset_name }}
-        else
-          python -m PyInstaller --clean --onefile \
-            --name=${{ matrix.asset_name }} \
-            --add-data="README.md:." \
-            --add-data="build_info.txt:." \
-            video_analyzer/__main__.py
-        fi
-      shell: bash
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            python -m PyInstaller --clean --onefile \
+              --name=${{ matrix.asset_name }} \
+              --add-data="README.md:." \
+              --add-data="build_info.txt:." \
+              --version-file=version_info.txt \
+              --manifest=video_analyzer.manifest \
+              --add-binary="LICENSE;." \
+              --hiddenimport=pkg_resources \
+              --hiddenimport=packaging \
+              --hiddenimport=packaging.version \
+              --hiddenimport=packaging.specifiers \
+              --hiddenimport=packaging.requirements \
+              --key=VideoAnalyzer \
+              video_analyzer/__main__.py
+          elif [ "${{ matrix.os }}" = "ubuntu-18.04" ]; then
+            python -m PyInstaller --clean --onefile \
+              --name=${{ matrix.asset_name }} \
+              --add-data="README.md:." \
+              --add-data="build_info.txt:." \
+              --runtime-tmpdir /tmp \
+              video_analyzer/__main__.py
+            patchelf --set-rpath '$ORIGIN/lib' dist/${{ matrix.asset_name }}
+          else
+            python -m PyInstaller --clean --onefile \
+              --name=${{ matrix.asset_name }} \
+              --add-data="README.md:." \
+              --add-data="build_info.txt:." \
+              video_analyzer/__main__.py
+          fi
+        shell: bash
 
-    # Generate checksums
-    - name: Generate SHA256
-      run: |
-        cd dist
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          certutil -hashfile ${{ matrix.asset_name }} SHA256 > ${{ matrix.asset_name }}.sha256
-        else
-          shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
-        fi
-      shell: bash
+      - name: Generate SHA256
+        run: |
+          cd dist
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            certutil -hashfile ${{ matrix.asset_name }} SHA256 > ${{ matrix.asset_name }}.sha256
+          else
+            shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+          fi
+        shell: bash
 
-    # Linux GPG Signing (free)
-    - name: Sign Linux Binary
-      if: matrix.os == 'ubuntu-18.04'
-      env:
-        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-      run: |
-        echo "$GPG_PRIVATE_KEY" | gpg --import
-        echo "$GPG_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 --detach-sign dist/${{ matrix.asset_name }}
+      - name: Sign Linux Binary
+        if: matrix.os == 'ubuntu-18.04'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --import
+          echo "$GPG_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 --detach-sign dist/${{ matrix.asset_name }}
 
-    - name: Upload Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./dist/${{ matrix.asset_name }}
-        asset_name: ${{ matrix.asset_name }}
-        asset_content_type: ${{ matrix.asset_content_type }}
+      - name: Upload Binary
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./dist/${{ matrix.asset_name }}
+          asset_name: ${{ matrix.asset_name }}
+          asset_content_type: ${{ matrix.asset_content_type }}
 
-    - name: Upload SHA256
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./dist/${{ matrix.asset_name }}.sha256
-        asset_name: ${{ matrix.asset_name }}.sha256
-        asset_content_type: text/plain
+      - name: Upload SHA256
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./dist/${{ matrix.asset_name }}.sha256
+          asset_name: ${{ matrix.asset_name }}.sha256
+          asset_content_type: text/plain
 
-    # Upload GPG signature for Linux binary
-    - name: Upload Linux Signature
-      if: matrix.os == 'ubuntu-18.04'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./dist/${{ matrix.asset_name }}.sig
-        asset_name: ${{ matrix.asset_name }}.sig
-        asset_content_type: application/octet-stream
+      - name: Upload Linux Signature
+        if: matrix.os == 'ubuntu-18.04'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./dist/${{ matrix.asset_name }}.sig
+          asset_name: ${{ matrix.asset_name }}.sig
+          asset_content_type: application/octet-stream
 
 ### Security Notes
 - Our executable is signed with a digital signature for security
