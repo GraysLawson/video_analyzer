@@ -1,7 +1,7 @@
 import os
 import logging
 from collections import defaultdict
-from typing import Dict, List, Set, Optional, Callable
+from typing import Dict, List, Set, Optional, Callable, Tuple
 from .video_metadata import VideoMetadata
 from .content_info import ContentInfo
 
@@ -14,6 +14,7 @@ class VideoAnalyzer:
         self.content_data = defaultdict(list)
         self.duplicates = {}
         self.selected_for_deletion = set()
+        self._metadata_cache = {}
     
     def find_video_files(self) -> List[str]:
         """Find all video files in the directory and subdirectories."""
@@ -31,31 +32,48 @@ class VideoAnalyzer:
         
         return video_files
     
+    def process_single_file(self, file_path: str) -> Optional[Dict]:
+        """Process a single video file and return its metadata."""
+        try:
+            # Check cache first
+            if file_path in self._metadata_cache:
+                return self._metadata_cache[file_path]
+            
+            # Get metadata
+            metadata = VideoMetadata.get_video_metadata(file_path)
+            if metadata:
+                self._metadata_cache[file_path] = metadata
+            return metadata
+            
+        except Exception as e:
+            logging.error(f"Error processing {file_path}: {str(e)}")
+            return None
+    
+    def add_file_metadata(self, file_path: str, metadata: Dict) -> None:
+        """Add processed file metadata to the content data."""
+        # Create content signature
+        content_signature = self._create_content_signature(metadata, file_path)
+        
+        # Add file info to content data
+        self.content_data[content_signature].append({
+            'path': file_path,
+            'filename': os.path.basename(file_path),
+            **metadata
+        })
+    
     def scan_video_files(self, video_files: List[str], progress_callback: Optional[Callable] = None) -> None:
         """Process the video files and extract metadata."""
         for file_path in video_files:
             try:
-                # Get metadata
-                metadata = VideoMetadata.get_video_metadata(file_path)
-                if not metadata:
-                    logging.warning(f"Could not extract metadata from: {file_path}")
-                    continue
-                
-                # Create content signature
-                content_signature = self._create_content_signature(metadata, file_path)
-                
-                # Add file info to content data
-                self.content_data[content_signature].append({
-                    'path': file_path,
-                    'filename': os.path.basename(file_path),
-                    **metadata
-                })
+                metadata = self.process_single_file(file_path)
+                if metadata:
+                    self.add_file_metadata(file_path, metadata)
                 
                 if progress_callback:
                     progress_callback(file_path)
                 
             except Exception as e:
-                logging.error(f"Error processing {file_path}: {str(e)}", exc_info=True)
+                logging.error(f"Error processing {file_path}: {str(e)}")
     
     def _create_content_signature(self, metadata: Dict, file_path: str) -> str:
         """Create a content signature for grouping similar videos."""
@@ -66,12 +84,17 @@ class VideoAnalyzer:
         # Create base name without extension and quality indicators
         base_name = os.path.splitext(os.path.basename(file_path))[0].lower()
         # Remove common quality indicators
-        quality_indicators = ['1080p', '720p', '480p', '2160p', '4k', 'uhd', 'hd', 'dvdrip', 'bdrip', 'webdl']
-        for indicator in quality_indicators:
-            base_name = base_name.replace(indicator, '')
+        quality_indicators = {'1080p', '720p', '480p', '2160p', '4k', 'uhd', 'hd', 
+                            'dvdrip', 'bdrip', 'webdl', 'bluray', 'web', 'hdtv'}
         
-        # Clean up the base name
-        base_name = ''.join(c for c in base_name if c.isalnum() or c.isspace()).strip()
+        # More efficient string cleaning
+        words = base_name.split()
+        cleaned_words = []
+        for word in words:
+            if word not in quality_indicators and not any(qi in word for qi in quality_indicators):
+                cleaned_words.append(''.join(c for c in word if c.isalnum()))
+        
+        base_name = ' '.join(cleaned_words)
         
         # Create signature combining cleaned name and duration
         # Round duration to nearest second to account for small variations
@@ -88,10 +111,24 @@ class VideoAnalyzer:
         self.duplicates = {}
         duplicate_groups = 0
         
+        # Pre-calculate file sizes for better performance
+        file_sizes = {
+            file_info['path']: os.path.getsize(file_info['path'])
+            for content_files in self.content_data.values()
+            for file_info in content_files
+        }
+        
         for content_signature, files in self.content_data.items():
             if len(files) > 1:
                 # Sort files by resolution (highest to lowest)
-                files_sorted = sorted(files, key=lambda x: (x.get('height', 0) * x.get('width', 0)), reverse=True)
+                files_sorted = sorted(
+                    files,
+                    key=lambda x: (
+                        x.get('height', 0) * x.get('width', 0),
+                        x.get('bitrate_value', 0)
+                    ),
+                    reverse=True
+                )
                 
                 # Compare file metadata for similarity
                 similar_files = self._group_similar_files(files_sorted)
@@ -105,7 +142,11 @@ class VideoAnalyzer:
                         # Log duplicate group details
                         logging.info(f"Found duplicate group {duplicate_groups}:")
                         for file_info in group:
-                            logging.info(f"  - {file_info['path']} ({file_info['resolution']}, {file_info['file_size']})")
+                            size = file_sizes[file_info['path']]
+                            logging.info(
+                                f"  - {file_info['path']} "
+                                f"({file_info['resolution']}, {size} bytes)"
+                            )
         
         return self.duplicates
     

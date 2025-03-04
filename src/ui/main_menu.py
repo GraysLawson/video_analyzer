@@ -1,179 +1,146 @@
-from typing import Dict, List
-from tabulate import tabulate
-from colorama import Fore, Style, Back
-from ..utils.display import DisplayUtils
+import os
+from rich.console import Console
+from rich.menu import Menu
+from ..utils.display import DisplayManager
 from ..core.analyzer import VideoAnalyzer
 
 class MainMenu:
     def __init__(self, analyzer: VideoAnalyzer):
         self.analyzer = analyzer
-        self.display = DisplayUtils()
+        self.display = DisplayManager()
+        self.console = Console()
     
-    def show_menu(self) -> None:
-        """Display the main menu and handle user input."""
+    def show_menu(self):
+        """Display the main menu."""
         while True:
-            self.display.clear_screen()
+            self.console.clear()
+            self.console.print("[bold cyan]Video Analyzer Menu[/bold cyan]")
+            self.console.print()
             
-            # Show header
-            print(f"\n{Back.BLUE}{Fore.WHITE}{Style.BRIGHT} 📹 Duplicate Video Manager 📹 {Style.RESET_ALL}")
-            print(f"{Fore.CYAN}{'═' * 60}{Style.RESET_ALL}\n")
-            
-            if not self.analyzer.duplicates:
-                print(f"{Fore.GREEN}No duplicates found. Nothing to manage.{Style.RESET_ALL}")
-                return
-            
-            # Show summary of duplicates
-            print(f"{Fore.YELLOW}{Style.BRIGHT}Found duplicates in:{Style.RESET_ALL}")
-            
-            # Create a menu of content with duplicates
-            content_options = self._get_content_options()
-            table_data = self._create_table_data(content_options)
-            
-            # Display the table
-            headers = ["#", "Content", "Duplicate Items", "Total Files", "Status"]
-            print(tabulate(table_data, headers=headers, tablefmt="simple"))
-            
-            # Show options
-            print(f"\n{Fore.CYAN}Options:{Style.RESET_ALL}")
-            options_table = [
-                [f"{Fore.CYAN}1-{len(content_options)}{Style.RESET_ALL}", "Manage specific content"],
-                [f"{Fore.CYAN}a{Style.RESET_ALL}", "Auto-select lower resolution files"],
-                [f"{Fore.CYAN}d{Style.RESET_ALL}", "Delete all selected files"],
-                [f"{Fore.CYAN}c{Style.RESET_ALL}", "Clear all selections"],
-                [f"{Fore.CYAN}q{Style.RESET_ALL}", "Quit"]
+            menu_items = [
+                ("1", "View Duplicate Groups"),
+                ("2", "Auto-Select Lower Quality Files"),
+                ("3", "View Storage Analysis Chart"),
+                ("4", "View Duplicates Distribution"),
+                ("5", "Review Selected Files"),
+                ("6", "Execute Deletion"),
+                ("q", "Quit")
             ]
-            print(tabulate(options_table, tablefmt="plain"))
             
-            # Get user choice
-            choice = input(f"\n{Fore.GREEN}Enter your choice: {Style.RESET_ALL}")
+            for key, desc in menu_items:
+                self.console.print(f"[yellow]{key}[/yellow]: {desc}")
             
-            if not self._handle_choice(choice, content_options):
+            choice = input("\nEnter your choice: ").lower()
+            
+            if choice == '1':
+                self._show_duplicate_groups()
+            elif choice == '2':
+                self._auto_select_files()
+            elif choice == '3':
+                self._show_storage_analysis()
+            elif choice == '4':
+                self._show_duplicates_distribution()
+            elif choice == '5':
+                self._review_selected_files()
+            elif choice == '6':
+                self._execute_deletion()
+            elif choice == 'q':
                 break
     
-    def _get_content_options(self) -> List[tuple]:
-        """Get list of content options with their details."""
-        content_options = []
-        i = 1
-        for content_key in sorted(self.analyzer.duplicates.keys()):
-            num_dups = len(self.analyzer.duplicates[content_key])
-            total_files = sum(len(files) for files in self.analyzer.duplicates[content_key].values())
-            
-            # Count selected files
-            selected = sum(
-                1 for files in self.analyzer.duplicates[content_key].values()
-                for file in files
-                if file['path'] in self.analyzer.selected_for_deletion
-            )
-            
-            content_options.append((i, content_key, num_dups, total_files, selected))
-            i += 1
+    def _show_duplicate_groups(self):
+        """Display duplicate groups with detailed information."""
+        self.console.clear()
         
-        return content_options
-    
-    def _create_table_data(self, content_options: List[tuple]) -> List[List[str]]:
-        """Create table data from content options."""
-        table_data = []
-        for opt_num, content_key, num_dups, total_files, selected in content_options:
-            status = (f"{Fore.GREEN}[{selected}/{total_files} selected]{Style.RESET_ALL}"
-                     if selected > 0 else f"{Fore.YELLOW}[0 selected]{Style.RESET_ALL}")
-            
-            table_data.append([
-                f"{Fore.CYAN}{opt_num}{Style.RESET_ALL}",
-                content_key,
-                f"{num_dups} items",
-                f"{total_files} files",
-                status
-            ])
-        return table_data
-    
-    def _handle_choice(self, choice: str, content_options: List[tuple]) -> bool:
-        """Handle user menu choice. Returns False if should exit menu."""
-        if choice.lower() == 'q':
-            return False
-        elif choice.lower() == 'a':
-            self._handle_auto_select()
-        elif choice.lower() == 'd':
-            self._handle_delete()
-        elif choice.lower() == 'c':
-            self._handle_clear()
-        else:
-            try:
-                opt_num = int(choice)
-                if 1 <= opt_num <= len(content_options):
-                    content_key = content_options[opt_num - 1][1]
-                    from .content_menu import ContentMenu
-                    content_menu = ContentMenu(self.analyzer, content_key)
-                    content_menu.show_menu()
-                else:
-                    self.display.print_status(f"Invalid option: {choice}", Fore.RED)
-                    input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}")
-            except ValueError:
-                self.display.print_status(f"Invalid option: {choice}", Fore.RED)
-                input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}")
-        return True
-    
-    def _handle_auto_select(self) -> None:
-        """Handle auto-select option."""
-        total_selected = 0
-        for content_dups in self.analyzer.duplicates.values():
-            for files in content_dups.values():
-                before = len(self.analyzer.selected_for_deletion.intersection(
-                    file['path'] for file in files
-                ))
-                self.analyzer.auto_select_files(files)
-                after = len(self.analyzer.selected_for_deletion.intersection(
-                    file['path'] for file in files
-                ))
-                total_selected += (after - before)
+        if not self.analyzer.duplicates:
+            self.console.print("[yellow]No duplicate groups found.[/yellow]")
+            input("\nPress Enter to continue...")
+            return
         
-        self.display.print_status(f"Auto-selected {total_selected} files for deletion", Fore.GREEN)
-        input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}")
+        for group_id, files in self.analyzer.duplicates.items():
+            self.console.print(f"\n[bold cyan]Group {group_id}:[/bold cyan]")
+            
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("File Name")
+            table.add_column("Resolution")
+            table.add_column("Size")
+            table.add_column("Bitrate")
+            
+            for file in files:
+                table.add_row(
+                    os.path.basename(file['path']),
+                    file.get('resolution', 'Unknown'),
+                    file.get('file_size', 'Unknown'),
+                    file.get('bitrate', 'Unknown')
+                )
+            
+            self.console.print(table)
+        
+        input("\nPress Enter to continue...")
     
-    def _handle_delete(self) -> None:
-        """Handle delete option."""
+    def _auto_select_files(self):
+        """Auto-select lower quality files and show summary."""
+        total_size_before = sum(os.path.getsize(file['path']) 
+                              for group in self.analyzer.duplicates.values() 
+                              for file in group)
+        
+        for group in self.analyzer.duplicates.values():
+            self.analyzer.auto_select_files(group)
+        
+        selected_size = sum(os.path.getsize(path) 
+                          for path in self.analyzer.selected_for_deletion)
+        
+        self.display.show_deletion_summary([
+            {'path': path} for path in self.analyzer.selected_for_deletion
+        ])
+        
+        input("\nPress Enter to continue...")
+    
+    def _show_storage_analysis(self):
+        """Display storage analysis chart."""
+        total_size = sum(os.path.getsize(file['path']) 
+                        for group in self.analyzer.duplicates.values() 
+                        for file in group)
+        duplicate_size = sum(os.path.getsize(file['path']) 
+                           for group in self.analyzer.duplicates.values() 
+                           for file in group[1:])
+        selected_size = sum(os.path.getsize(path) 
+                          for path in self.analyzer.selected_for_deletion)
+        
+        self.display.plot_storage_chart(total_size, duplicate_size, selected_size)
+        input("\nPress Enter to continue...")
+    
+    def _show_duplicates_distribution(self):
+        """Display duplicate files distribution chart."""
+        self.display.plot_duplicate_distribution(self.analyzer.duplicates)
+        input("\nPress Enter to continue...")
+    
+    def _review_selected_files(self):
+        """Review files selected for deletion."""
         if not self.analyzer.selected_for_deletion:
-            self.display.print_status("No files selected for deletion", Fore.YELLOW)
-            input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}")
+            self.console.print("[yellow]No files selected for deletion.[/yellow]")
+            input("\nPress Enter to continue...")
             return
         
-        # Show confirmation
-        print(f"\n{Fore.RED}{Style.BRIGHT}WARNING: You are about to delete "
-              f"{len(self.analyzer.selected_for_deletion)} files.{Style.RESET_ALL}")
-        print(f"{Fore.RED}This action cannot be undone.{Style.RESET_ALL}")
-        
-        if self.analyzer.dry_run:
-            print(f"\n{Fore.YELLOW}DRY RUN MODE: No files will actually be deleted.{Style.RESET_ALL}")
-        
-        # Ask for confirmation
-        confirm = input(f"\n{Fore.RED}Type 'DELETE' to confirm: {Style.RESET_ALL}")
-        
-        if confirm.upper() != "DELETE":
-            self.display.print_status("Deletion cancelled", Fore.YELLOW)
-            input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}")
-            return
-        
-        # Delete files
-        result = self.analyzer.delete_selected_files()
-        
-        # Show summary
-        saved_space_str = self.display.format_file_size(result['saved_space'])
-        if self.analyzer.dry_run:
-            self.display.print_status(
-                f"DRY RUN: Would have deleted {result['deleted']} files "
-                f"(saved {saved_space_str}), {result['failed']} failed",
-                Fore.GREEN
-            )
-        else:
-            self.display.print_status(
-                f"Deleted {result['deleted']} files "
-                f"(saved {saved_space_str}), {result['failed']} failed",
-                Fore.GREEN
-            )
-        
-        input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}")
+        self.display.show_deletion_summary([
+            {'path': path} for path in self.analyzer.selected_for_deletion
+        ])
+        input("\nPress Enter to continue...")
     
-    def _handle_clear(self) -> None:
-        """Handle clear selections option."""
-        self.analyzer.selected_for_deletion.clear()
-        self.display.print_status("All selections cleared", Fore.YELLOW)
-        input(f"{Fore.CYAN}Press Enter to continue...{Style.RESET_ALL}") 
+    def _execute_deletion(self):
+        """Execute the deletion of selected files."""
+        if not self.analyzer.selected_for_deletion:
+            self.console.print("[yellow]No files selected for deletion.[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+        
+        self.console.print("\n[bold red]Warning: This will permanently delete the selected files![/bold red]")
+        confirm = input("Are you sure you want to proceed? (yes/no): ").lower()
+        
+        if confirm == 'yes':
+            results = self.analyzer.delete_selected_files()
+            self.console.print(f"\n[green]Deleted {results['deleted']} files[/green]")
+            self.console.print(f"[green]Saved {humanize.naturalsize(results['saved_space'])}[/green]")
+            if results['failed'] > 0:
+                self.console.print(f"[red]Failed to delete {results['failed']} files[/red]")
+        
+        input("\nPress Enter to continue...") 
