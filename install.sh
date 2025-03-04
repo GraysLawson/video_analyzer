@@ -164,7 +164,8 @@ setup(
         "opencv-python>=4.5.0",
         "numpy>=1.19.0",
         "ffmpeg-python>=0.2.0",
-        "rich>=10.0.0",
+        "rich==12.6.0",  # Using specific version that includes rich.menu
+        "colorama>=0.4.4",
     ],
     entry_points={
         'console_scripts': [
@@ -196,6 +197,107 @@ EOF
 
     log "WARNING" "Created minimal placeholder code"
     echo -e "${YELLOW}Created minimal placeholder code. Please download the full source code manually.${NC}"
+}
+
+# Create a function to check and install rich package with menu module
+check_rich_package() {
+    local venv_dir="$1"
+    
+    log "INFO" "Checking for rich package with menu module"
+    echo -e "${CYAN}Checking for rich package compatibility...${NC}"
+    
+    # Activate virtual environment
+    source "$venv_dir/bin/activate" || {
+        log "ERROR" "Failed to activate virtual environment"
+        echo -e "${RED}Failed to activate virtual environment.${NC}"
+        return 1
+    }
+    
+    # Check if rich.menu is available by trying to import it
+    if python -c "try: from rich.menu import Menu; print('Rich menu module found.'); exit(0)\nexcept ImportError: print('Rich menu module not found.'); exit(1)" 2>/dev/null; then
+        log "INFO" "Rich menu module found"
+        echo -e "${GREEN}Rich menu module found.${NC}"
+    else
+        log "WARNING" "Rich menu module not found, installing compatible version"
+        echo -e "${YELLOW}Rich menu module not found. Installing compatible version...${NC}"
+        
+        # Install specific version of rich that includes menu module
+        pip uninstall -y rich >/dev/null 2>&1
+        pip install rich==12.6.0 || {
+            log "ERROR" "Failed to install compatible rich version"
+            echo -e "${RED}Failed to install compatible rich version.${NC}"
+            return 1
+        }
+        log "INFO" "Installed rich 12.6.0 which includes menu module"
+        echo -e "${GREEN}Installed rich 12.6.0 which includes menu module.${NC}"
+    fi
+    
+    # Deactivate virtual environment
+    deactivate
+    return 0
+}
+
+# Function to repair an existing installation
+repair_installation() {
+    local install_dir="$1"
+    
+    log "INFO" "Repairing installation at $install_dir"
+    echo -e "${CYAN}Repairing installation...${NC}"
+    
+    # Virtual environment directory
+    local venv_dir="$install_dir/venv"
+    
+    # Check if virtual environment exists
+    if [[ ! -d "$venv_dir" ]]; then
+        log "ERROR" "Virtual environment not found at $venv_dir"
+        echo -e "${RED}Error: Virtual environment not found at $venv_dir${NC}"
+        return 1
+    fi
+    
+    # Fix rich package installation
+    check_rich_package "$venv_dir"
+    
+    # Check if we need to update setup.py (if it exists)
+    local setup_file="$install_dir/source/setup.py"
+    if [[ -f "$setup_file" ]]; then
+        log "INFO" "Updating setup.py to include proper rich version"
+        echo -e "${CYAN}Updating setup.py to include proper rich version...${NC}"
+        
+        # Create a backup
+        cp "$setup_file" "${setup_file}.bak"
+        
+        # Update the rich version in setup.py
+        sed -i 's/rich[><=][0-9."]*/rich==12.6.0/g' "$setup_file" || {
+            log "WARNING" "Failed to update setup.py, manually patching installation"
+            echo -e "${YELLOW}Failed to update setup.py, manually patching installation...${NC}"
+        }
+    fi
+    
+    # Reinstall the package
+    log "INFO" "Reinstalling the package with updated dependencies"
+    echo -e "${CYAN}Reinstalling the package with updated dependencies...${NC}"
+    
+    source "$venv_dir/bin/activate" || {
+        log "ERROR" "Failed to activate virtual environment"
+        echo -e "${RED}Failed to activate virtual environment.${NC}"
+        return 1
+    }
+    
+    # Reinstall from source directory if it exists
+    if [[ -d "$install_dir/source" ]]; then
+        (cd "$install_dir/source" && pip install -e .) || {
+            log "ERROR" "Failed to reinstall package"
+            echo -e "${RED}Failed to reinstall package.${NC}"
+            deactivate
+            return 1
+        }
+    fi
+    
+    deactivate
+    
+    log "INFO" "Installation repair completed successfully"
+    echo -e "${GREEN}Installation repair completed successfully!${NC}"
+    return 0
 }
 
 # Detect operating system
@@ -584,15 +686,19 @@ main() {
     fi
     
     # Handle existing installation
+    local install_dir=""
+    local install_type="user"  # Default type
+    
     if [[ -n "$existing_installation" ]]; then
         echo -e "${YELLOW}Existing installation detected:${NC} $existing_path"
         echo -e "${CYAN}What would you like to do?${NC}"
         echo "1. Update existing installation"
         echo "2. Uninstall existing installation"
-        echo "3. Install fresh copy in a different location"
-        echo "4. Cancel"
+        echo "3. Repair existing installation (fixes missing modules)"
+        echo "4. Install fresh copy in a different location"
+        echo "5. Cancel"
         
-        read -p "Select an option [1-4]: " -n 1 -r
+        read -p "Select an option [1-5]: " -n 1 -r
         echo
         log "INFO" "User selected option: $REPLY for existing installation"
         
@@ -601,6 +707,7 @@ main() {
                 log "INFO" "User chose to update existing installation"
                 echo -e "${CYAN}Updating existing installation...${NC}"
                 install_dir="$existing_path"
+                install_type="$existing_installation"
                 ;;
             2)  # Uninstall
                 log "INFO" "User chose to uninstall existing installation"
@@ -622,7 +729,26 @@ main() {
                     exit 1
                 fi
                 ;;
-            3)  # Fresh install in different location
+            3)  # Repair
+                log "INFO" "User chose to repair existing installation"
+                if repair_installation "$existing_path"; then
+                    echo -e "${GREEN}Installation repaired successfully. Goodbye!${NC}"
+                    exit 0
+                else
+                    echo -e "${RED}Repair failed. Would you like to reinstall?${NC} (y/n)"
+                    read -p "" -n 1 -r
+                    echo
+                    
+                    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                        log "INFO" "User chose not to reinstall after failed repair"
+                        echo -e "${YELLOW}Exiting without reinstallation.${NC}"
+                        exit 1
+                    fi
+                    # Continue with fresh installation
+                    log "INFO" "Continuing with fresh installation after failed repair"
+                fi
+                ;;
+            4)  # Fresh install in different location
                 log "INFO" "User chose fresh installation in different location"
                 echo -e "${CYAN}Proceeding with fresh installation...${NC}"
                 # Continue with normal installation flow
@@ -636,7 +762,7 @@ main() {
     fi
     
     # Ask for installation type if not updating
-    if [[ "$REPLY" != "1" ]]; then
+    if [[ -z "$install_dir" ]]; then
         echo -e "${CYAN}Installation Type:${NC}"
         echo "1. User installation (recommended for regular users)"
         echo "2. System-wide installation (requires admin/root privileges)"
@@ -693,6 +819,9 @@ main() {
     
     # Setup Python environment
     setup_python_environment "$venv_dir" "$project_dir"
+    
+    # Check and fix rich package installation
+    check_rich_package "$venv_dir"
     
     if [[ $package_type =~ ^[2]$ ]]; then
         # Standalone executable

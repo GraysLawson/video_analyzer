@@ -11,6 +11,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.table import Table
 from rich import box
+from collections import defaultdict
 
 class DisplayUtils:
     @staticmethod

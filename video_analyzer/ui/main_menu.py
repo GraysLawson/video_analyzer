@@ -1,4 +1,6 @@
+from msilib import Table
 import os
+import humanize
 from rich.console import Console
 from rich.menu import Menu
 from ..utils.display import DisplayManager
