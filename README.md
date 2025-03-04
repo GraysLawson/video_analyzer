@@ -1,22 +1,44 @@
 # Video Analyzer
 
-Find and manage duplicate video files with different resolutions. Automatically identify duplicate videos and keep only the highest quality versions.
+<div align="center">
 
-## Features
+![Video Analyzer Logo](https://img.shields.io/badge/Video%20Analyzer-v1.0-blue?style=for-the-badge&logo=video&logoColor=white)
 
-- 🔍 Scan directories for video files and extract metadata
-- 🎥 Identify duplicate videos with different resolutions
-- 📊 Compare video quality based on resolution, bitrate, and file size
-- 🗑️ Automatically select lower quality duplicates for removal
-- 🔄 Move files to backup location instead of deleting them
-- 📋 Interactive menu for managing duplicate files
-- 📈 Visual progress tracking and statistics
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-green.svg)](https://github.com/GraysLawson/video_analyzer)
 
-## Installation
+</div>
 
-### Quick Install Script (Linux, macOS, ARM)
+> Find and manage duplicate video files with different resolutions. Automatically identify duplicate videos and keep only the highest quality versions.
 
-The easiest way to install Video Analyzer is using our provided install script:
+## ✨ Features
+
+- 🔍 **Smart Detection**: Scan directories for video files and extract detailed metadata
+- 🎥 **Duplicate Identification**: Identify duplicate videos even with different resolutions
+- 📊 **Quality Comparison**: Compare video quality based on resolution, bitrate, and file size
+- 🗑️ **Intelligent Selection**: Automatically select lower quality duplicates for removal
+- 🔄 **Safe Operations**: Move files to backup location instead of deleting them
+- 📋 **Interactive UI**: Modern, user-friendly menu for managing duplicate files
+- 📈 **Visual Analytics**: Rich progress tracking, statistics, and data visualization
+- 🔄 **Parallel Processing**: Efficiently analyze large video collections with multi-threading
+
+## 📋 Compatibility
+
+| Platform | Status | Requirements |
+|----------|--------|--------------|
+| Linux (Debian/Ubuntu) | ✅ Fully Supported | Python 3.7+, FFmpeg |
+| Linux (RedHat/Fedora) | ✅ Fully Supported | Python 3.7+, FFmpeg |
+| Linux (Arch) | ✅ Fully Supported | Python 3.7+, FFmpeg |
+| macOS (Intel) | ✅ Fully Supported | Python 3.7+, FFmpeg |
+| macOS (Apple Silicon) | ✅ Fully Supported | Python 3.7+, FFmpeg |
+| Windows | ⚠️ Partial Support | Python 3.7+, FFmpeg in PATH |
+
+## 🚀 Installation
+
+### Quick Install Script (Recommended)
+
+The easiest way to install Video Analyzer is using our provided install script, which supports Linux, macOS, and ARM devices:
 
 ```bash
 # Download the installation script
@@ -29,16 +51,31 @@ chmod +x install.sh
 ./install.sh
 ```
 
-The install script will guide you through the installation process interactively and set up Video Analyzer based on your preferences.
+The install script will:
+- Detect your operating system and architecture
+- Install required dependencies (Python, FFmpeg, etc.)
+- Check for existing installations with options to update or repair
+- Set up the application with your preferred settings
+- Create necessary launcher scripts and symlinks
+
+#### Installation Options
+
+During installation, you can choose between:
+
+1. **User Installation**: Installs in your home directory (~/.local/video-analyzer)
+2. **System-wide Installation**: Installs for all users (/usr/local/share/video-analyzer)
+3. **Python Package**: Standard Python package installation (recommended)
+4. **Standalone Executable**: Creates a standalone binary (experimental)
 
 ### Manual Installation
 
-If you prefer to install manually, you can follow these steps:
+If you prefer to install manually:
 
 #### Prerequisites
 
 - Python 3.7 or higher
 - FFmpeg (for video metadata extraction)
+- pip (Python package manager)
 
 #### Installation Steps
 
@@ -69,17 +106,7 @@ If you prefer to install manually, you can follow these steps:
    python -m video_analyzer
    ```
 
-### Building a Standalone Executable
-
-You can build a standalone executable that doesn't require Python to be installed:
-
-```bash
-python build.py
-```
-
-The executable will be created in the `dist` directory.
-
-## Usage
+## 🔧 Usage
 
 ### Interactive Mode
 
@@ -114,46 +141,108 @@ options:
 
 ### Examples
 
-Scan a specific directory and run in non-interactive mode:
 ```bash
-video-analyzer -d /path/to/videos -n
-```
+# Scan a specific directory in interactive mode
+video-analyzer -d /path/to/videos
 
-Perform a dry run (no actual deletions):
-```bash
+# Perform a dry run (no actual deletions)
 video-analyzer -d /path/to/videos --dry-run
-```
 
-Move duplicate files to a backup location instead of deleting:
-```bash
+# Move duplicate files to a backup location instead of deleting
 video-analyzer -d /path/to/videos -m /path/to/backup
+
+# Run with custom similarity threshold in non-interactive mode
+video-analyzer -d /path/to/videos -s 0.85 -n
 ```
 
-## How It Works
+## ⚠️ Troubleshooting
 
-Video Analyzer works by:
+### Common Issues
 
-1. Scanning the specified directory for video files
-2. Extracting metadata (resolution, bitrate, duration, etc.) using FFmpeg
-3. Grouping similar videos based on filename and duration
-4. Calculating similarity scores between potential duplicates
-5. Identifying the highest quality version of each video
-6. Allowing you to manage duplicate files
+#### 1. Module `rich.menu` not found
 
-The application uses several criteria to determine if videos are duplicates:
-- Similar durations (within a few seconds)
-- Similar filenames (after removing quality indicators like "1080p", "720p", etc.)
-- Compatible resolutions and bitrates (higher resolution should have higher bitrate)
+If you encounter this error:
+```
+ModuleNotFoundError: No module named 'rich.menu'
+```
 
-## Contributing
+**Solution:**
+- Run the installation script with the repair option (option 3)
+- Or manually install the compatible version: `pip install rich==12.6.0`
+
+#### 2. Missing FFmpeg
+
+If you see errors related to FFmpeg:
+```
+FileNotFoundError: ffprobe not found. Please install ffmpeg.
+```
+
+**Solution:**
+- Install FFmpeg using your package manager:
+  - Debian/Ubuntu: `sudo apt-get install ffmpeg`
+  - RedHat/Fedora: `sudo dnf install ffmpeg`
+  - macOS: `brew install ffmpeg`
+  - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
+
+#### 3. Permission Errors
+
+If you get permission errors when running the application:
+
+**Solution:**
+- For user installations, ensure the directory is writable
+- For system-wide installations, run with sudo: `sudo video-analyzer`
+
+#### 4. Windows-specific Modules Missing
+
+If you see errors like:
+```
+ModuleNotFoundError: No module named 'msilib'
+```
+
+**Solution:**
+- This is typically an incompatibility with Linux. Please reinstall the application or run the repair option.
+
+### Installation Logs
+
+The installation script creates detailed logs at:
+```
+/tmp/video-analyzer-install-TIMESTAMP.log
+```
+
+Check these logs if you encounter installation issues.
+
+## 🛠️ Recent Improvements
+
+- ✅ Improved installation script with multi-platform support
+- ✅ Added repair functionality for fixing common issues
+- ✅ Enhanced error handling and logging
+- ✅ Fixed dependency issues with rich package versions
+- ✅ Added system-wide installation option
+- ✅ Improved performance with caching and parallel processing
+- ✅ Enhanced duplicate detection algorithms
+- ✅ Added option to move files instead of deletion
+
+## 📊 How It Works
+
+Video Analyzer uses sophisticated algorithms to:
+
+1. Scan specified directories for video files
+2. Extract rich metadata (resolution, bitrate, duration, codec, etc.) using FFmpeg
+3. Group similar videos based on filename patterns and duration
+4. Calculate similarity scores between potential duplicates
+5. Rank videos in each group by quality metrics
+6. Present results with interactive management options
+
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 - [FFmpeg](https://ffmpeg.org/) for video metadata extraction
 - [Rich](https://github.com/Textualize/rich) for beautiful terminal interfaces
+- [Plotext](https://github.com/piccolomo/plotext) for terminal-based plotting

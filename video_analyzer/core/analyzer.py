@@ -5,8 +5,11 @@ from collections import defaultdict
 from typing import Dict, List, Set, Optional, Callable, Tuple, Any
 import hashlib
 from functools import lru_cache
+import re
+from multiprocessing import cpu_count
 from .video_metadata import VideoMetadata
 from .content_info import ContentInfo
+import humanize
 
 class VideoAnalyzer:
     def __init__(self, directory: str, output_dir: Optional[str] = None, dry_run: bool = False, min_similarity: float = 0.95):
@@ -20,6 +23,17 @@ class VideoAnalyzer:
         self._metadata_cache = {}
         # Cache of file sizes for better performance
         self._file_size_cache = {}
+        # Resolution groups for better organization
+        self.resolution_groups = {
+            'HD': [720, 1080],
+            'UHD': [2160, 4320]  # 4K and 8K
+        }
+        # Track resolution groups for reporting
+        self.resolution_stats = defaultdict(int)
+        # Track TV shows versus movies
+        self.content_types = {'tv_show': 0, 'movie': 0}
+        # Number of threads to use for parallel processing
+        self.num_threads = max(4, cpu_count() * 2)  # Use 2x CPU cores for I/O bound tasks
     
     def find_video_files(self) -> List[str]:
         """Find all video files in the directory and subdirectories."""
@@ -53,7 +67,21 @@ class VideoAnalyzer:
             # Get metadata
             metadata = VideoMetadata.get_video_metadata(file_path)
             if metadata:
+                # Extract content info from filename
+                content_info = ContentInfo.extract_title_info(os.path.basename(file_path))
+                metadata.update(content_info)
+                
+                # Classify resolution
+                height = metadata.get('height', 0)
+                metadata['resolution_category'] = self._classify_resolution(height)
+                
+                # Update statistics
+                self.content_types[metadata.get('type', 'unknown')] += 1
+                self.resolution_stats[metadata['resolution_category']] += 1
+                
+                # Cache the enhanced metadata
                 self._metadata_cache[file_path] = metadata
+                
                 # Cache file size if not already cached
                 if file_path not in self._file_size_cache:
                     try:
@@ -66,9 +94,24 @@ class VideoAnalyzer:
             logging.error(f"Error processing {file_path}: {str(e)}")
             return None
     
+    def _classify_resolution(self, height: int) -> str:
+        """Classify video resolution into categories."""
+        if height <= 0:
+            return "Unknown"
+        elif height <= 480:
+            return "SD"
+        elif height <= 720:
+            return "HD"
+        elif height <= 1080:
+            return "Full HD"
+        elif height <= 2160:
+            return "4K"
+        else:
+            return "8K+"
+    
     def add_file_metadata(self, file_path: str, metadata: Dict) -> None:
         """Add processed file metadata to the content data."""
-        # Create content signature
+        # Create content signature with improved algorithm
         content_signature = self._create_content_signature(metadata, file_path)
         
         # Add file info to content data
@@ -79,30 +122,74 @@ class VideoAnalyzer:
         })
     
     def scan_video_files(self, video_files: List[str], progress_callback: Optional[Callable] = None) -> None:
-        """Process the video files and extract metadata using parallel processing."""
-        # Use batch processing for better performance
-        batch_size = min(100, max(10, len(video_files) // (os.cpu_count() or 1)))
-        
-        # Process files in batches
-        for i in range(0, len(video_files), batch_size):
-            batch = video_files[i:i + batch_size]
-            # Use VideoMetadata's batch processing capabilities
-            results = VideoMetadata.batch_process_files(batch)
+        """Process the video files and extract metadata using optimized parallel processing."""
+        if not video_files:
+            logging.warning("No video files found to scan.")
+            return
             
-            # Add results to our data structures
-            for file_path, metadata in results.items():
+        logging.info(f"Processing {len(video_files)} video files with {self.num_threads} threads")
+        
+        # Calculate optimal batch size based on number of files and threads
+        # Small files can use smaller batches for better progress updates
+        # Large collections need larger batches for efficiency
+        batch_size = min(100, max(10, len(video_files) // self.num_threads))
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.num_threads) as executor:
+            # Process files in batches for better performance and memory usage
+            futures = []
+            
+            for i in range(0, len(video_files), batch_size):
+                batch = video_files[i:i + batch_size]
+                futures.append(executor.submit(self._process_batch, batch, progress_callback))
+            
+            # Wait for all batches to complete
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logging.error(f"Error processing batch: {str(e)}")
+    
+    def _process_batch(self, batch: List[str], progress_callback: Optional[Callable] = None) -> None:
+        """Process a batch of files and update metadata."""
+        # Use VideoMetadata's batch processing capabilities
+        results = VideoMetadata.batch_process_files(batch, max_workers=min(len(batch), 8))
+        
+        # Add results to our data structures
+        for file_path, metadata in results.items():
+            if metadata:
+                # Extract content info and enhance metadata
+                content_info = ContentInfo.extract_title_info(os.path.basename(file_path))
+                metadata.update(content_info)
+                metadata['resolution_category'] = self._classify_resolution(metadata.get('height', 0))
+                
+                # Update content statistics 
+                self.content_types[metadata.get('type', 'unknown')] += 1
+                self.resolution_stats[metadata['resolution_category']] += 1
+                
+                # Add to content data
                 self.add_file_metadata(file_path, metadata)
+                
+                # Update progress
                 if progress_callback:
                     progress_callback(file_path)
     
     @lru_cache(maxsize=1024)
     def _clean_filename(self, filename: str) -> str:
         """Clean filename by removing quality indicators and non-alphanumeric chars."""
-        quality_indicators = {'1080p', '720p', '480p', '2160p', '4k', 'uhd', 'hd', 
-                            'dvdrip', 'bdrip', 'webdl', 'bluray', 'web', 'hdtv'}
+        # Enhanced list of quality and release indicators
+        quality_indicators = {
+            '1080p', '720p', '480p', '2160p', '4k', 'uhd', 'hd', '8k',
+            'dvdrip', 'bdrip', 'webdl', 'web-dl', 'webrip', 'bluray', 'web', 'hdtv',
+            'x264', 'x265', 'h264', 'h265', 'hevc', 'xvid', 'divx',
+            'remux', 'hdr', 'dolby', 'atmos', 'truehd', 'dts'
+        }
         
+        # Extract show/movie name and remove quality indicators
         # Get base name without extension
         base_name = os.path.splitext(filename)[0].lower()
+        
+        # Remove year patterns like (2020) or [2020]
+        base_name = re.sub(r'[\(\[\.]?\d{4}[\)\]\.]?', ' ', base_name)
         
         # More efficient string cleaning
         words = base_name.split()
@@ -114,65 +201,190 @@ class VideoAnalyzer:
         return ' '.join(cleaned_words)
     
     def _create_content_signature(self, metadata: Dict, file_path: str) -> str:
-        """Create a content signature for grouping similar videos."""
-        # Use duration as primary similarity metric
-        duration = metadata.get('duration_value', 0)
-        file_size = metadata.get('file_size_value', 0)
+        """Create a content signature for grouping similar videos with improved accuracy."""
+        # Get type (tv_show or movie)
+        content_type = metadata.get('type', 'unknown')
         
-        # Clean the filename
-        base_name = self._clean_filename(os.path.basename(file_path))
+        # For TV shows, include show name, season, and episode
+        if content_type == 'tv_show':
+            show_name = metadata.get('title', '').lower()
+            season = metadata.get('season', 0)
+            episode = metadata.get('episode', 0)
+            # Create signature for TV shows including show name, season and episode
+            name_hash = hashlib.md5(show_name.encode()).hexdigest()[:8]
+            return f"tv:{name_hash}|s{season:02d}e{episode:02d}"
         
-        # Create signature combining cleaned name and duration
-        # Round duration to nearest second to account for small variations
-        duration_key = round(duration)
-        
-        # If file size is very different, it might be a different encoding
-        # Use size ranges to group similar files
-        size_range = file_size // (100 * 1024)  # Group by 100MB ranges
-        
-        # Include a hash of the first part of the base name for better differentiation
-        # This helps avoid false positives when duration is similar but content is different
-        name_hash = hashlib.md5(base_name[:20].encode()).hexdigest()[:8]
-        
-        return f"{name_hash}|{duration_key}|{size_range}"
+        # For movies, use duration, file name, and size range
+        else:
+            # Use duration as primary similarity metric
+            duration = metadata.get('duration_value', 0)
+            
+            # Clean the filename
+            base_name = self._clean_filename(os.path.basename(file_path))
+            
+            # Create signature combining cleaned name and duration
+            # Round duration to nearest second to account for small variations
+            duration_key = round(duration)
+            
+            # Use a hash of the base name for better differentiation
+            name_hash = hashlib.md5(base_name.encode()).hexdigest()[:8]
+            
+            return f"movie:{name_hash}|{duration_key}"
     
     def find_duplicates(self) -> Dict:
-        """Identify duplicates using content signatures and metadata."""
+        """Identify duplicates using content signatures and metadata with improved resolution handling."""
         self.duplicates = {}
         duplicate_groups = 0
         
         for content_signature, files in self.content_data.items():
             if len(files) > 1:
-                # Sort files by resolution (highest to lowest)
+                # Sort files by resolution and quality (highest to lowest)
                 files_sorted = sorted(
                     files,
                     key=lambda x: (
-                        x.get('height', 0) * x.get('width', 0),
-                        x.get('bitrate_value', 0),
-                        x.get('fps', 0)
+                        x.get('height', 0) * x.get('width', 0),  # Total pixels (resolution)
+                        x.get('bitrate_value', 0),               # Bitrate
+                        -self._calculate_quality_score(x),       # Overall quality score
+                        -self._get_file_size(x['path'])          # Prefer smaller files if quality is the same
                     ),
                     reverse=True
                 )
                 
-                # Compare file metadata for similarity
-                similar_files = self._group_similar_files(files_sorted)
+                # Group them by content type (TV show or movie)
+                content_type = files_sorted[0].get('type', 'unknown')
                 
-                # Add groups with multiple files to duplicates
-                for group in similar_files:
-                    if len(group) > 1:
-                        self.duplicates[f"group_{duplicate_groups}"] = group
-                        duplicate_groups += 1
-                        
-                        # Log duplicate group details
-                        logging.info(f"Found duplicate group {duplicate_groups}:")
-                        for file_info in group:
-                            size = self._get_file_size(file_info['path'])
-                            logging.info(
-                                f"  - {file_info['path']} "
-                                f"({file_info['resolution']}, {size} bytes)"
-                            )
+                # Store the highest quality resolution for comparison
+                highest_resolution = files_sorted[0].get('resolution', 'Unknown')
+                highest_bitrate = files_sorted[0].get('bitrate', 'Unknown')
+                
+                # Add quality comparison data to each file for UI display
+                for file_info in files_sorted:
+                    file_resolution = file_info.get('resolution', 'Unknown')
+                    file_info['is_highest_quality'] = (file_info == files_sorted[0])
+                    file_info['compared_to_best'] = self._compare_to_highest_quality(
+                        file_info, files_sorted[0]
+                    )
+                
+                # Create a useful group name
+                if content_type == 'tv_show':
+                    title = files_sorted[0].get('title', 'Unknown')
+                    season = files_sorted[0].get('season', 0)
+                    episode = files_sorted[0].get('episode', 0)
+                    group_name = f"{title} - S{season:02d}E{episode:02d}"
+                else:
+                    title = files_sorted[0].get('title', 'Unknown')
+                    group_name = title
+                
+                self.duplicates[group_name] = files_sorted
+                duplicate_groups += 1
+                
+                # Log duplicate group details
+                logging.info(f"Found duplicate group: {group_name}")
+                for file_info in files_sorted:
+                    size = self._get_file_size(file_info['path'])
+                    resolution = file_info.get('resolution', 'Unknown')
+                    bitrate = file_info.get('bitrate', 'Unknown')
+                    logging.info(
+                        f"  - {file_info['path']} "
+                        f"({resolution}, {bitrate}, {humanize.naturalsize(size)})"
+                    )
         
+        logging.info(f"Found {duplicate_groups} duplicate groups")
         return self.duplicates
+    
+    def _calculate_quality_score(self, file_info: Dict) -> float:
+        """Calculate a quality score based on multiple factors."""
+        # Base score starts at 0
+        score = 0.0
+        
+        # Add points for resolution (0-40 points)
+        height = file_info.get('height', 0)
+        if height > 2160:  # 8K
+            score += 40
+        elif height > 1080:  # 4K
+            score += 30
+        elif height > 720:  # Full HD
+            score += 20
+        elif height > 480:  # HD
+            score += 10
+        else:  # SD
+            score += 5
+        
+        # Add points for bitrate (0-30 points)
+        bitrate = file_info.get('bitrate_value', 0)
+        score += min(30, bitrate * 3)  # Up to 30 points based on bitrate
+        
+        # Add points for modern codecs (0-20 points)
+        codec = file_info.get('codec', '').lower()
+        if 'hevc' in codec or 'h265' in codec or 'av1' in codec:
+            score += 20  # Modern codec with high efficiency
+        elif 'h264' in codec or 'avc' in codec:
+            score += 15  # Good standard codec
+        else:
+            score += 5   # Older codec
+        
+        # Add points for FPS (0-10 points)
+        fps = file_info.get('fps', 0)
+        if fps >= 60:
+            score += 10  # High frame rate
+        elif fps >= 30:
+            score += 7   # Standard frame rate
+        elif fps >= 24:
+            score += 5   # Film frame rate
+        else:
+            score += 2   # Low frame rate
+        
+        return score
+    
+    def _compare_to_highest_quality(self, file_info: Dict, best_file: Dict) -> Dict:
+        """Generate comparison metrics between this file and the highest quality version."""
+        comparison = {}
+        
+        # Resolution comparison
+        file_height = file_info.get('height', 0)
+        best_height = best_file.get('height', 0)
+        if file_height > 0 and best_height > 0:
+            resolution_ratio = file_height / best_height
+            comparison['resolution_percent'] = int(resolution_ratio * 100)
+            comparison['resolution_diff'] = f"{file_height}p vs {best_height}p"
+        else:
+            comparison['resolution_percent'] = 100
+            comparison['resolution_diff'] = "Unknown"
+        
+        # Bitrate comparison
+        file_bitrate = file_info.get('bitrate_value', 0)
+        best_bitrate = best_file.get('bitrate_value', 0)
+        if file_bitrate > 0 and best_bitrate > 0:
+            bitrate_ratio = file_bitrate / best_bitrate
+            comparison['bitrate_percent'] = int(bitrate_ratio * 100)
+            comparison['bitrate_diff'] = f"{file_bitrate:.2f} Mbps vs {best_bitrate:.2f} Mbps"
+        else:
+            comparison['bitrate_percent'] = 100
+            comparison['bitrate_diff'] = "Unknown"
+        
+        # File size comparison
+        file_size = self._get_file_size(file_info['path'])
+        best_size = self._get_file_size(best_file['path'])
+        if file_size > 0 and best_size > 0:
+            size_ratio = file_size / best_size
+            comparison['size_percent'] = int(size_ratio * 100)
+            comparison['size_diff'] = f"{humanize.naturalsize(file_size)} vs {humanize.naturalsize(best_size)}"
+            comparison['size_diff_value'] = best_size - file_size
+        else:
+            comparison['size_percent'] = 100
+            comparison['size_diff'] = "Unknown"
+            comparison['size_diff_value'] = 0
+        
+        # Overall quality score comparison
+        file_score = self._calculate_quality_score(file_info)
+        best_score = self._calculate_quality_score(best_file)
+        if file_score > 0 and best_score > 0:
+            quality_ratio = file_score / best_score
+            comparison['quality_percent'] = int(quality_ratio * 100)
+        else:
+            comparison['quality_percent'] = 100
+        
+        return comparison
     
     def _get_file_size(self, file_path: str) -> int:
         """Get file size with caching."""
@@ -215,7 +427,14 @@ class VideoAnalyzer:
         if file1['path'] == file2['path']:
             return True
         
-        # Calculate similarity score
+        # For TV shows, match on title, season, and episode
+        if file1.get('type') == 'tv_show' and file2.get('type') == 'tv_show':
+            if (file1.get('title') == file2.get('title') and
+                file1.get('season') == file2.get('season') and
+                file1.get('episode') == file2.get('episode')):
+                return True
+        
+        # For everything else, calculate similarity score
         similarity_score = self._calculate_similarity_score(file1, file2)
         
         # Check if similarity exceeds threshold
@@ -292,19 +511,9 @@ class VideoAnalyzer:
                 continue
                 
             if keep_highest_resolution:
-                # Sort by resolution (highest first)
-                sorted_files = sorted(
-                    files, 
-                    key=lambda x: (
-                        x.get('height', 0) * x.get('width', 0),
-                        x.get('bitrate_value', 0),
-                        -self._get_file_size(x['path'])  # Prefer smaller file size if resolution is the same
-                    ), 
-                    reverse=True
-                )
-                
+                # The files are already sorted with highest quality first from find_duplicates()
                 # Keep the highest resolution, mark others for deletion
-                for file_info in sorted_files[1:]:
+                for file_info in files[1:]:
                     self.selected_for_deletion.add(file_info['path'])
             else:
                 # Sort by file size (smallest first)
